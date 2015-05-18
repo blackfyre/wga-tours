@@ -17,13 +17,15 @@ g.gulp.task('styles', function() {
 g.gulp.task('scripts', function() {
     return g.gulp.src([
         'bower_components/jquery/dist/jquery.js',
-        'bower_components/dist/jquery.magnific-popup.js'
+        'bower_components/dist/jquery.magnific-popup.js',
+        '_src/js/main.js'
     ])
         .pipe(g.concat('main.js'))
         .pipe(g.gulp.dest('js/'))
         .pipe(g.rename({ extname: '.min.js' }))
         .pipe(g.uglify())
-        .pipe(g.gulp.dest('js/'));
+        .pipe(g.gulp.dest('js/'))
+        .pipe(g.browserSync.reload({stream: true}));
 });
 
 g.gulp.task('default',function() {
@@ -31,12 +33,13 @@ g.gulp.task('default',function() {
 });
 
 // Static Server + watching scss/html files
-g.gulp.task('serve', ['styles'], function() {
+g.gulp.task('serve', ['styles','scripts'], function() {
 
     g.browserSync.init({
         server: "./"
     });
 
-    g.gulp.watch('scss/**/*.scss', ['styles']);
+    g.gulp.watch('_src/scss/**/*.scss', ['styles']);
+    g.gulp.watch('_src/js/**/*.js', ['scripts']);
     g.gulp.watch("*.html").on('change', g.browserSync.reload);
 });
