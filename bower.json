@@ -1,0 +1,20 @@
+{
+  "name": "fold",
+  "version": "0.0.0",
+  "authors": [
+    "blackfyre <gnick666@gmail.com>"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "bourbon": "~4.2.3",
+    "magnific-popup": "~1.0.0",
+    "modernizr": "~2.8.3"
+  }
+}
