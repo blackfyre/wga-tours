@@ -1,12 +1,13 @@
 @import "vendor/normalize";
+@import '../../bower_components/bourbon/app/assets/stylesheets/bourbon';
+// http://bourbon.io/
+@import 'partials/variables';
+// colors, fonts etc...
+@import 'partials/mixins';
+// custom mixins
+@import 'partials/layout';
 
-@import '../../bower_components/bourbon/app/assets/stylesheets/bourbon'; // http://bourbon.io/
-
-@import 'partials/variables'; // colors, fonts etc...
-
-@import 'partials/mixins'; // custom mixins
-
-@import 'partials/layout'; // responsive grid and media queries
+// responsive grid and media queries
 
 /* -------------------------------- 
 
@@ -15,29 +16,29 @@ Primary style
 -------------------------------- */
 
 *, *::after, *::before {
-	box-sizing: border-box;
+  box-sizing: border-box;
 }
 
 html {
-	font-size: 62.5%;
+  font-size: 62.5%;
 }
 
 body {
-	font: {
-		size: 1.6rem;
-		family: $primary-font; // variables inside partials > _variables.scss
-	}
-	color: $color-1;
-	background-color: $color-5;
+  font: {
+    size: 1.6rem;
+    family: $primary-font; // variables inside partials > _variables.scss
+  }
+  color: $color-1;
+  background-color: $color-5;
 }
 
 a {
-	color: $color-2;
-	text-decoration: none;
+  color: $color-2;
+  text-decoration: none;
 }
 
 h1, h2 {
-	font-family: $secondary-font;
+  font-family: $secondary-font;
 }
 
 /* -------------------------------- 
@@ -47,7 +48,7 @@ Patterns - reusable parts of our design
 -------------------------------- */
 
 .overflow-hidden {
-	overflow: hidden;
+  overflow: hidden;
 }
 
 /* -------------------------------- 
@@ -57,27 +58,27 @@ Header
 -------------------------------- */
 
 header {
-	height: 300px;
-	line-height: 170px;
-	text-align: center;
-	background: $color-6;
+  height: 300px;
+  line-height: 170px;
+  text-align: center;
+  background: $color-6;
 
-	h1 {
-		font-size: 2.2rem;
-		color: $color-1;
-	}
+  h1 {
+    font-size: 2.2rem;
+    color: $color-1;
+  }
 
-	@include MQ(M) {
-		height: 200px;
-		line-height: 110px;
+  @include MQ(M) {
+    height: 200px;
+    line-height: 110px;
 
-		h1 {
-			font-size: 3rem;
-		}
-	}
+    h1 {
+      font-size: 3rem;
+    }
+  }
 
   blockquote {
-	line-height: normal;
+    line-height: normal;
   }
 }
 
@@ -88,170 +89,189 @@ Main content
 -------------------------------- */
 
 .cd-main {
-	overflow-x: hidden;
+  overflow-x: hidden;
 
-	&::before {
-		/* never visible - this is used in jQuery to check the current MQ */ 
-		display: none;
-		content: 'mobile';
-	} 
+  &::before {
+    /* never visible - this is used in jQuery to check the current MQ */
+    display: none;
+    content: 'mobile';
+  }
 
-	> * {
-		@include transition(transform $fold-animation $fold-content-animation);
-	}
-	
-	&.fold-is-open > * {
-		/* on mobile - translate .cd-main content to the right when the .cd-folding-panel is open */
-		@include transform(translateX(100%));
-		@include transition(transform $fold-animation 0s);
-	}
+  > * {
+    @include transition(transform $fold-animation $fold-content-animation);
+  }
 
-	@include MQ(M) {
+  &.fold-is-open > * {
+    /* on mobile - translate .cd-main content to the right when the .cd-folding-panel is open */
+    @include transform(translateX(100%));
+    @include transition(transform $fold-animation 0s);
+  }
 
-		&.fold-is-open > * {
-			@include transform(translateX(600px));
-		}
-	}
+  @include MQ(M) {
 
-	@include MQ(L) {
+    &.fold-is-open > * {
+      @include transform(translateX(600px));
+    }
+  }
 
-		&::before {
-			/* never visible - this is used in jQuery to check the current MQ */ 
-			content: 'desktop';
-		}
+  @include MQ(L) {
 
-		&.fold-is-open > * {
-			/* reset style - on bigger devices we translate the gallery items */
-			@include transform(translateX(0));
-		}
-	}
+    &::before {
+      /* never visible - this is used in jQuery to check the current MQ */
+      content: 'desktop';
+    }
+
+    &.fold-is-open > * {
+      /* reset style - on bigger devices we translate the gallery items */
+      @include transform(translateX(0));
+    }
+  }
+
+  header {
+    h1 {
+      margin-top: 0;
+    }
+  }
 }
 
 .cd-gallery {
-	@include clearfix;
+  @include clearfix;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 
-	&::before {
-		/* this is the dark layer covering the .cd-gallery when the .cd-folding-panel is open */
-		display: block;
-		content: '';
-		position: absolute;
-		z-index: 1;
-		top: 0;
-		left: 0;
-		height: 100%;
-		width: 100%;
-		background-color: rgba($color-5, .6);
-		opacity: 0;
-		visibility: hidden;
-		@include transition(opacity  $fold-animation $fold-content-animation, visibility 0s $fold-animation+$fold-content-animation);
-	}
+  &::before {
+    /* this is the dark layer covering the .cd-gallery when the .cd-folding-panel is open */
+    display: block;
+    content: '';
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 100%;
+    background-color: rgba($color-5, .6);
+    opacity: 0;
+    visibility: hidden;
+    @include transition(opacity $fold-animation $fold-content-animation, visibility 0s $fold-animation+$fold-content-animation);
+  }
 
-	.fold-is-open &::before {
-		visibility: visible;
-		opacity: 1;
-		@include transition(opacity  $fold-animation 0s, visibility 0s 0s);
-	}
+  .fold-is-open &::before {
+    visibility: visible;
+    opacity: 1;
+    @include transition(opacity $fold-animation 0s, visibility 0s 0s);
+  }
 }
 
 .cd-item {
-	width: 100%;
-	height: 300px;
-	text-align: center;
+  width: 100%;
+  height: 300px;
+  text-align: center;
 
-	/* Force Hardware Acceleration */
-	@include transform(translateZ(0));
-	@include backface-visibility(hidden);
+  /* Force Hardware Acceleration */
+  @include transform(translateZ(0));
+  @include backface-visibility(hidden);
 
-	@include transition(transform $fold-animation $fold-content-animation);
+  @include transition(transform $fold-animation $fold-content-animation);
 
-	> a {
-		display: table;
-		height: 100%;
-		width: 100%;
-		overflow: hidden;
-		@include font-smoothing;
-	  	color: #fff;
+  > a {
+    display: table;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    @include font-smoothing;
+    color: #fff;
 
-	}
+    > div {
+      @include transition(all $fold-animation ease-in-out);
+    }
 
-	div {
-		display: table-cell;
-		vertical-align: middle;
-	}
+    &:hover {
+      > div {
+        background-color: rgba(0, 0, 0, 0.3);
+      }
+    }
 
-	h2 {
-		font-size: 2.2rem;
-	  font-weight: 700;
-	}
+  }
 
-	p {
-		line-height: 1.2;
-		font-size: 1.4rem;
-		opacity: 0.9;
-		padding: 1em 0;
-	  font-weight: 700;
-	}
+  div {
+    display: table-cell;
+    vertical-align: middle;
+  }
 
-	b {
-		display: inline-block;
-		font: {
-			size: 1.2rem;
-			weight: bold;
-		}
-		text-transform: uppercase; 
-		letter-spacing: 1px;
-		padding: 1em 1.3em;
-		border-radius: 50em;
-		border: 1px solid $color-6;
-	}
-	
-	@include MQ(L) {
-		@include column(.5);
-		height: 520px;
-		@include transition(transform $fold-animation $fold-content-animation);
+  h2 {
+    font-size: 2.2rem;
+    font-weight: 700;
+  }
 
-		h2 {
-			font-size: 3rem;
-		}
+  p {
+    line-height: 1.2;
+    font-size: 1.4rem;
+    opacity: 0.9;
+    padding: 1em 0;
+    font-weight: 700;
+  }
 
-		p {
-			font-size: 1.6rem;
-		}
+  b {
+    display: inline-block;
+    font: {
+      size: 1.2rem;
+      weight: bold;
+    }
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 1em 1.3em;
+    border-radius: 50em;
+    border: 1px solid $color-6;
+  }
 
-		h2, p {
-			@include transform(translateY(30px));
-			@include transition(transform 0.3s 0.1s);
-		}
+  @include MQ(L) {
+    @include column(.5);
+    height: 520px;
+    @include transition(transform $fold-animation $fold-content-animation);
 
-		b {
-			opacity: 0;
-			@include transform(translateY(20px));
-			@include transition(opacity 0.3s 0s, transform 0.3s 0s);
-		}
+    h2 {
+      font-size: 3rem;
+    }
 
-		.no-touch & a:hover {
+    p {
+      font-size: 1.6rem;
+    }
 
-			h2, p {
-				@include transform(translateY(0));
-				@include transition(transform 0.3s 0s);
-			}
+    h2, p {
+      @include transform(translateY(30px));
+      @include transition(transform 0.3s 0.1s);
+    }
 
-			b {
-				opacity: 1;
-				@include transform(translateY(0));
-				@include transition(opacity 0.3s 0.1s, transform 0.3s 0.1s);
-			}
-		}
+    b {
+      opacity: 0;
+      @include transform(translateY(20px));
+      @include transition(opacity 0.3s 0s, transform 0.3s 0s);
+    }
 
-		.fold-is-open & {
-			@include transition(transform $fold-animation 0s);
-			@include transform(translateX(-400px));
+    .no-touch & a:hover {
 
-			&:nth-of-type(2n) {
-				@include transform(translateX(400px));
-			}
-		}
-	}
+      h2, p {
+        @include transform(translateY(0));
+        @include transition(transform 0.3s 0s);
+      }
+
+      b {
+        opacity: 1;
+        @include transform(translateY(0));
+        @include transition(opacity 0.3s 0.1s, transform 0.3s 0.1s);
+      }
+    }
+
+    .fold-is-open & {
+      @include transition(transform $fold-animation 0s);
+      @include transform(translateX(-400px));
+
+      &:nth-of-type(2n) {
+        @include transform(translateX(400px));
+      }
+    }
+  }
 }
 
 /* -------------------------------- 
@@ -261,257 +281,259 @@ folding panel
 -------------------------------- */
 
 .cd-folding-panel {
-	position: fixed;
-	z-index: 1;
-	top: 0;
-	left: 0;
-	height: 100vh;
-	width: 100%;
-	visibility: hidden;
-	overflow: hidden;
-	
-	@include transition(visibility 0s $fold-animation+$fold-content-animation);
+  position: fixed;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 100%;
+  visibility: hidden;
+  overflow: hidden;
 
-	.fold-left,
-	.fold-right {
-		/* the :after elements of .fold-left and .fold-right are the 2 fold sides */
-		width: 100%;
-		height: 100vh;
-		overflow: hidden;
-		position: relative;
+  @include transition(visibility 0s $fold-animation+$fold-content-animation);
 
-		/* enable a 3D-space for children elements */
-		@include perspective(2000px);
+  .fold-left,
+  .fold-right {
+    /* the :after elements of .fold-left and .fold-right are the 2 fold sides */
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
 
-		&::after {
-			/* 2 fold sides */
-			content: '';
-			position: absolute;
-			top: 0;
-			left: 0;
-			height: 100%;
-			width: 100%;
+    /* enable a 3D-space for children elements */
+    @include perspective(2000px);
 
-			/* Force Hardware Acceleration */
-			@include transform(translateZ(0));
-			@include backface-visibility(hidden);
+    &::after {
+      /* 2 fold sides */
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 100%;
 
-			@include transition(transform $fold-animation $fold-content-animation, background-color $fold-animation $fold-content-animation);
-		}
-	}
+      /* Force Hardware Acceleration */
+      @include transform(translateZ(0));
+      @include backface-visibility(hidden);
 
-	.fold-right {
-		@include perspective-origin(0% 50%);
+      @include transition(transform $fold-animation $fold-content-animation, background-color $fold-animation $fold-content-animation);
+    }
+  }
 
-		&::after {
-			@include transform-origin(right center);
-			@include transform(translateX(-100%) rotateY(-90deg));
-			background-color: darken($color-3, 10%);
-		}
-	}
+  .fold-right {
+    @include perspective-origin(0% 50%);
 
-	.fold-left {
-		/* on mobile only the right fold side is visible */
-		display: none;
+    &::after {
+      @include transform-origin(right center);
+      @include transform(translateX(-100%) rotateY(-90deg));
+      background-color: darken($color-3, 10%);
+    }
+  }
 
-		&::after {
-			background-color: lighten($color-3, 12%);
-		}
-	}
+  .fold-left {
+    /* on mobile only the right fold side is visible */
+    display: none;
 
-	.cd-close {
-		/* 'X' close icon */
-		position: absolute;
-		z-index: 1;
-		display: inline-block;
-		top: 10px;
-		right: 10px;
-		height: 44px;
-		width: 44px;
+    &::after {
+      background-color: lighten($color-3, 12%);
+    }
+  }
 
-		/* image replacement */
-		overflow: hidden;
-		text-indent: 100%;
-		white-space: nowrap;
+  .cd-close {
+    /* 'X' close icon */
+    position: absolute;
+    z-index: 1;
+    display: inline-block;
+    top: 10px;
+    right: 10px;
+    height: 44px;
+    width: 44px;
 
-		opacity: 0;
-		@include transition(opacity .2s 0s);
+    /* image replacement */
+    overflow: hidden;
+    text-indent: 100%;
+    white-space: nowrap;
 
-		&::after, 
-		&::before {
-			/* lines of 'X' icon */
-			content: '';
-			position: absolute;
-			height: 3px;
-			width: 32px;
-			left: 50%;
-	    	top: 50%;
-			background-color: $color-2;	
-			@include backface-visibility(hidden);
-			@include transition(opacity .2s);
-		}
+    opacity: 0;
+    @include transition(opacity .2s 0s);
 
-		&::after {
-			@include transform(translateX(-50%) translateY(-50%) rotate(45deg));
-		}
+    &::after,
+    &::before {
+      /* lines of 'X' icon */
+      content: '';
+      position: absolute;
+      height: 3px;
+      width: 32px;
+      left: 50%;
+      top: 50%;
+      background-color: $color-2;
+      @include backface-visibility(hidden);
+      @include transition(opacity .2s);
+    }
 
-		&::before {
-			@include transform(translateX(-50%) translateY(-50%) rotate(-45deg));
-		}
-	}
+    &::after {
+      @include transform(translateX(-50%) translateY(-50%) rotate(45deg));
+    }
 
-	&.is-open {
-		visibility: visible;
-		@include transition(visibility 0s 0s);
+    &::before {
+      @include transform(translateX(-50%) translateY(-50%) rotate(-45deg));
+    }
+  }
 
-		.fold-right::after,
-		.fold-left::after {
-			@include transform(translateX(0));
-			@include transition(transform $fold-animation 0s, background-color $fold-animation 0s);
-		}
+  &.is-open {
+    visibility: visible;
+    @include transition(visibility 0s 0s);
 
-		.fold-right::after {
-			background-color: lighten($color-3, 12%);
-		}
+    .fold-right::after,
+    .fold-left::after {
+      @include transform(translateX(0));
+      @include transition(transform $fold-animation 0s, background-color $fold-animation 0s);
+    }
 
-		.cd-close {
-			opacity: 1;
-			@include transition(opacity .2s $fold-animation);
-		}
-	}
+    .fold-right::after {
+      background-color: lighten($color-3, 12%);
+    }
 
-	@include MQ(M) {
-		width: 600px;
-	}
+    .cd-close {
+      opacity: 1;
+      @include transition(opacity .2s $fold-animation);
+    }
+  }
 
-	@include MQ(L) {
-		@include center(x);
-		width: 800px;
+  @include MQ(M) {
+    width: 600px;
+  }
 
-		.fold-left,
-		.fold-right {
-			@include column(.5);
-			height: 100%;
-		}
+  @include MQ(L) {
+    @include center(x);
+    width: 800px;
 
-		.fold-right {
-			/* change perspective-origin so that the 2 fold sides have the same vanishing point */
-			@include perspective-origin(0% 50%);
+    .fold-left,
+    .fold-right {
+      @include column(.5);
+      height: 100%;
+    }
 
-			&::after {
-				@include transform-origin(right center);
-				@include transform(translateX(-100%) rotateY(-90deg));
-			}
-		}
+    .fold-right {
+      /* change perspective-origin so that the 2 fold sides have the same vanishing point */
+      @include perspective-origin(0% 50%);
 
-		.fold-left {
-			display: block;
-			/* change perspective-origin so that the 2 fold sides have the same vanishing point */
-			@include perspective-origin(100% 50%);
+      &::after {
+        @include transform-origin(right center);
+        @include transform(translateX(-100%) rotateY(-90deg));
+      }
+    }
 
-			&::after {
-				@include transform-origin(left center);
-				@include transform(translateX(100%) rotateY(90deg));
-			}
-		}
-	}
+    .fold-left {
+      display: block;
+      /* change perspective-origin so that the 2 fold sides have the same vanishing point */
+      @include perspective-origin(100% 50%);
+
+      &::after {
+        @include transform-origin(left center);
+        @include transform(translateX(100%) rotateY(90deg));
+      }
+    }
+  }
 }
 
 .cd-fold-content {
-	position: absolute;
-	top: 0;
-	left: 0;
-	height: 100%;
-	width: 100%;
-	padding: 4em 2em;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  padding: 4em 2em;
 
-	visibility: hidden;
-	@include transition(visibility 0s $fold-content-animation);
+  visibility: hidden;
+  @include transition(visibility 0s $fold-content-animation);
 
-	> * {
-		opacity: 0;
-		@include transform(translateY(20px));
-	}
-	
-	h2 {
-		font-size: 2.4rem;
-
-		@include transition(transform $fold-content-animation/2 $fold-content-animation/2, opacity $fold-content-animation/2 $fold-content-animation/2);
-	  margin-bottom: 20px;
-	}
-
-  h3 {
-	font-size: 2.2rem;
-	@include transition(transform $fold-content-animation/2 $fold-content-animation/2, opacity $fold-content-animation/2 $fold-content-animation/2);
-	margin-bottom: 10px;
+  > * {
+    opacity: 0;
+    @include transform(translateY(20px));
   }
 
-	p, em {
-		line-height: 1.6;
-	}
+  h2 {
+    font-size: 2.4rem;
 
-	em {
-		display: inline-block;
-		margin: 1em 0;
-		font-family: $secondary-font;
-		font-size: 1.8rem;
-		color: lighten($color-1, 30%);
+    @include transition(transform $fold-content-animation/2 $fold-content-animation/2, opacity $fold-content-animation/2 $fold-content-animation/2);
+    margin-bottom: 20px;
+  }
 
-		@include transition(transform $fold-content-animation/2 $fold-content-animation/4, opacity $fold-content-animation/2 $fold-content-animation/4);
-	}
+  h3 {
+    font-size: 2.2rem;
+    @include transition(transform $fold-content-animation/2 $fold-content-animation/2, opacity $fold-content-animation/2 $fold-content-animation/2);
+    margin-bottom: 10px;
+  }
 
-	p {
-		margin-bottom: 1em;
-		font-size: 1.4rem;
-		@include transition(transform $fold-content-animation/2 0s, opacity $fold-content-animation/2 0s);
-	    &:first-of-type::first-letter { initial-letter: 2; }
-	}
+  p, em {
+    line-height: 1.6;
+  }
 
-	.is-open & {
-		overflow-y: auto;
-		-webkit-overflow-scrolling: touch;
-		visibility: visible;
-		@include transition(visibility 0s $fold-animation);
+  em {
+    display: inline-block;
+    margin: 1em 0;
+    font-family: $secondary-font;
+    font-size: 1.8rem;
+    color: lighten($color-1, 30%);
 
-		> * {
-			opacity: 1;
-			@include transform(translateY(0));
-		}
+    @include transition(transform $fold-content-animation/2 $fold-content-animation/4, opacity $fold-content-animation/2 $fold-content-animation/4);
+  }
 
-		h2 {
-			@include transition(transform $fold-content-animation/2 $fold-animation, opacity $fold-content-animation/2 $fold-animation);
-		}
+  p {
+    margin-bottom: 1em;
+    font-size: 1.4rem;
+    @include transition(transform $fold-content-animation/2 0s, opacity $fold-content-animation/2 0s);
+    &:first-of-type::first-letter {
+      initial-letter: 2;
+    }
+  }
 
-		em {
-			@include transition(transform $fold-content-animation/2 $fold-animation+$fold-content-animation/4, opacity $fold-content-animation/2 $fold-animation+$fold-content-animation/4);
-		}
+  .is-open & {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    visibility: visible;
+    @include transition(visibility 0s $fold-animation);
 
-		p {
-			@include transition(transform $fold-content-animation/2 $fold-animation+$fold-content-animation/2, opacity $fold-content-animation/2 $fold-animation+$fold-content-animation/2);
-		}
-	}
+    > * {
+      opacity: 1;
+      @include transform(translateY(0));
+    }
 
-	@include MQ(M) {
-		h2 {
-			font-size: 3.2rem;
-		}
-	}
+    h2 {
+      @include transition(transform $fold-content-animation/2 $fold-animation, opacity $fold-content-animation/2 $fold-animation);
+    }
 
-	@include MQ(L) {
-		padding: 4em;
+    em {
+      @include transition(transform $fold-content-animation/2 $fold-animation+$fold-content-animation/4, opacity $fold-content-animation/2 $fold-animation+$fold-content-animation/4);
+    }
 
-		> * {
-			@include transform(translateY(40px));
-		}
+    p {
+      @include transition(transform $fold-content-animation/2 $fold-animation+$fold-content-animation/2, opacity $fold-content-animation/2 $fold-animation+$fold-content-animation/2);
+    }
+  }
 
-		em {
-			font-size: 2.2rem;
-		}
+  @include MQ(M) {
+    h2 {
+      font-size: 3.2rem;
+    }
+  }
 
-		p {
-			font-size: 1.6rem;
-		}
-	}
+  @include MQ(L) {
+    padding: 4em;
+
+    > * {
+      @include transform(translateY(40px));
+    }
+
+    em {
+      font-size: 2.2rem;
+    }
+
+    p {
+      font-size: 1.6rem;
+    }
+  }
 }
 
 /* -------------------------------- 
@@ -521,15 +543,15 @@ Javascript disabled
 -------------------------------- */
 
 .no-js .cd-fold-content.single-page {
-	position: static;
-	visibility: visible;
-	height: auto;
-	background-color: $color-3;
+  position: static;
+  visibility: visible;
+  height: auto;
+  background-color: $color-3;
 
-	> * {
-		opacity: 1;
-		@include transform(translateY(0));
-	}
+  > * {
+    opacity: 1;
+    @include transform(translateY(0));
+  }
 }
 
 /* PopUp */
@@ -542,10 +564,12 @@ Javascript disabled
   -moz-transition: all 0.15s ease-out;
   transition: all 0.15s ease-out;
 }
+
 /* overlay animate in */
 .mfp-fade.mfp-bg.mfp-ready {
   opacity: 0.8;
 }
+
 /* overlay animate out */
 .mfp-fade.mfp-bg.mfp-removing {
   opacity: 0;
@@ -559,16 +583,19 @@ Javascript disabled
   -moz-transition: all 0.15s ease-out;
   transition: all 0.15s ease-out;
 }
+
 /* content animate it */
 .mfp-fade.mfp-wrap.mfp-ready .mfp-content {
   opacity: 1;
 }
+
 /* content animate out */
 .mfp-fade.mfp-wrap.mfp-removing .mfp-content {
   opacity: 0;
 }
 
-/* Item backgrounds */ /* */
+/* Item backgrounds */
+/* */
 
 .cd-item {
   background-size: cover;
@@ -579,13 +606,13 @@ Javascript disabled
   background-image: url("../images/vasari.jpg");
 
   h2, p {
-	color: #000;
-	text-shadow: 2px 2px 5px rgba(163, 163, 163,0.6);
-	font-weight: 700;
+    color: #000;
+    text-shadow: 2px 2px 5px rgba(163, 163, 163, 0.6);
+    font-weight: 700;
   }
 
   b {
-	background-color: $color-1;
+    background-color: $color-1;
   }
 }
 
@@ -593,14 +620,15 @@ Javascript disabled
   background-image: url("../images/00view.jpg");
 
   b {
-	background-color: $color-1;
+    background-color: $color-1;
   }
 }
+
 #cd-item-3 {
   background-image: url("../images/wall1-lg.jpg");
 
   b {
-	background-color: $color-1;
+    background-color: $color-1;
   }
 }
 

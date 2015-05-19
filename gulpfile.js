@@ -8,7 +8,7 @@ var g = {
 };
 
 g.gulp.task('styles', function() {
-    return g.gulp.src('scss/style.scss')
+    return g.gulp.src('_src/scss/style.scss')
         .pipe(g.sass())
         .pipe(g.gulp.dest('css/'))
         .pipe(g.browserSync.reload({stream: true}));
