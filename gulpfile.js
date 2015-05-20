@@ -17,7 +17,10 @@ g.gulp.task('styles', function() {
 g.gulp.task('scripts', function() {
     return g.gulp.src([
         'bower_components/jquery/dist/jquery.js',
-        'bower_components/dist/jquery.magnific-popup.js',
+        'bower_components/magnific-popup/dist/jquery.magnific-popup.js',
+        'bower_components/underscore/underscore.js',
+        'bower_components/jquery.scrollTo/jquery.scrollTo.js',
+        'bower_components/tether-select/select.js',
         '_src/js/main.js'
     ])
         .pipe(g.concat('main.js'))

@@ -33,6 +33,38 @@ jQuery(document).ready(function($){
 		}
 	}
 
+    function createNavMenu(findIn) {
+
+        var conatiner = $('<div id="pageNav">');
+        var select = $('<select>');
+
+        findIn.find('.toNav').each(function() {
+            var e = $(this);
+            var uid = _.uniqueId('nav-element-');
+
+            $(this).attr('id',uid);
+
+            $('<option>',{
+                'value': uid,
+                'text': e.text()
+            }).appendTo(select);
+        });
+
+        select.appendTo(conatiner);
+        conatiner.prependTo(findIn);
+
+        Select.init();
+
+        select.on('change', function() {
+
+            var e = $(this);
+
+            findIn.scrollTo($('#' + e.val()),{
+                duration: 300
+            });
+        });
+    }
+
 	function toggleContent(url, bool) {
 		if( bool ) {
 			/* load and show new content */
@@ -44,11 +76,13 @@ jQuery(document).ready(function($){
 					$('.cd-main').addClass('fold-is-open');
 				}, 100);
 
-				$('.cd-fold-content').find('.pop-image').magnificPopup({
+				foldingContent.find('.pop-image').magnificPopup({
 					type: 'image',
 					removalDelay: 300,
 					mainClass: 'mfp-fade'
 				});
+
+                createNavMenu(foldingContent);
 			});
 		} else {
 			/* close the folding panel */

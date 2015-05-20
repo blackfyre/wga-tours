@@ -7,6 +7,8 @@
 // custom mixins
 @import 'partials/layout';
 
+@import "../../bower_components/tether-select/sass/select-theme-default";
+
 // responsive grid and media queries
 
 /* -------------------------------- 
@@ -21,6 +23,7 @@ Primary style
 
 html {
   font-size: 62.5%;
+  margin: 0 !important;
 }
 
 body {
@@ -406,7 +409,7 @@ folding panel
 
   @include MQ(L) {
     @include center(x);
-    width: 800px;
+    width: 1000px;
 
     .fold-left,
     .fold-right {
@@ -464,6 +467,7 @@ folding panel
     font-size: 2.2rem;
     @include transition(transform $fold-content-animation/2 $fold-content-animation/2, opacity $fold-content-animation/2 $fold-content-animation/2);
     margin-bottom: 10px;
+    margin-top: 0;
   }
 
   p, em {
@@ -487,6 +491,10 @@ folding panel
     &:first-of-type::first-letter {
       initial-letter: 2;
     }
+  }
+
+  img {
+    @include transition(transform $fold-content-animation/2 $fold-content-animation/4, opacity $fold-content-animation/2 $fold-content-animation/4);
   }
 
   .is-open & {
@@ -636,4 +644,29 @@ Javascript disabled
   background-image: url("../images/40maesta-l.jpg");
   background-position: center 30%;
 
+}
+
+/* The dirty stuff */
+.select.select-theme-default {
+  z-index: 10;
+
+  .select-content {
+    max-width: 100%;
+  }
+}
+
+.select-target.select-theme-default b {
+  height: 2rem;
+}
+
+#pageNav {
+  position: fixed;
+  /* top: 15px; */
+  width: 100%;
+  background-color: $color-6;
+  left: 0;
+  z-index: 1;
+  padding-top: 15px;
+  top: 0;
+  padding-left: 4em;
 }

@@ -15,6 +15,9 @@
   "dependencies": {
     "bourbon": "~4.2.3",
     "magnific-popup": "~1.0.0",
-    "modernizr": "~2.8.3"
+    "modernizr": "~2.8.3",
+    "tether-select": "~1.0.0",
+    "underscore": "~1.8.3",
+    "jquery.scrollTo": "~2.1.0"
   }
 }

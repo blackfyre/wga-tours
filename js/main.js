@@ -9209,6 +9209,5807 @@ return jQuery;
 
 }));
 
+/*! Magnific Popup - v1.0.0 - 2014-12-12
+* http://dimsemenov.com/plugins/magnific-popup/
+* Copyright (c) 2014 Dmitry Semenov; */
+;(function (factory) { 
+if (typeof define === 'function' && define.amd) { 
+ // AMD. Register as an anonymous module. 
+ define(['jquery'], factory); 
+ } else if (typeof exports === 'object') { 
+ // Node/CommonJS 
+ factory(require('jquery')); 
+ } else { 
+ // Browser globals 
+ factory(window.jQuery || window.Zepto); 
+ } 
+ }(function($) { 
+
+/*>>core*/
+/**
+ * 
+ * Magnific Popup Core JS file
+ * 
+ */
+
+
+/**
+ * Private static constants
+ */
+var CLOSE_EVENT = 'Close',
+	BEFORE_CLOSE_EVENT = 'BeforeClose',
+	AFTER_CLOSE_EVENT = 'AfterClose',
+	BEFORE_APPEND_EVENT = 'BeforeAppend',
+	MARKUP_PARSE_EVENT = 'MarkupParse',
+	OPEN_EVENT = 'Open',
+	CHANGE_EVENT = 'Change',
+	NS = 'mfp',
+	EVENT_NS = '.' + NS,
+	READY_CLASS = 'mfp-ready',
+	REMOVING_CLASS = 'mfp-removing',
+	PREVENT_CLOSE_CLASS = 'mfp-prevent-close';
+
+
+/**
+ * Private vars 
+ */
+var mfp, // As we have only one instance of MagnificPopup object, we define it locally to not to use 'this'
+	MagnificPopup = function(){},
+	_isJQ = !!(window.jQuery),
+	_prevStatus,
+	_window = $(window),
+	_body,
+	_document,
+	_prevContentType,
+	_wrapClasses,
+	_currPopupType;
+
+
+/**
+ * Private functions
+ */
+var _mfpOn = function(name, f) {
+		mfp.ev.on(NS + name + EVENT_NS, f);
+	},
+	_getEl = function(className, appendTo, html, raw) {
+		var el = document.createElement('div');
+		el.className = 'mfp-'+className;
+		if(html) {
+			el.innerHTML = html;
+		}
+		if(!raw) {
+			el = $(el);
+			if(appendTo) {
+				el.appendTo(appendTo);
+			}
+		} else if(appendTo) {
+			appendTo.appendChild(el);
+		}
+		return el;
+	},
+	_mfpTrigger = function(e, data) {
+		mfp.ev.triggerHandler(NS + e, data);
+
+		if(mfp.st.callbacks) {
+			// converts "mfpEventName" to "eventName" callback and triggers it if it's present
+			e = e.charAt(0).toLowerCase() + e.slice(1);
+			if(mfp.st.callbacks[e]) {
+				mfp.st.callbacks[e].apply(mfp, $.isArray(data) ? data : [data]);
+			}
+		}
+	},
+	_getCloseBtn = function(type) {
+		if(type !== _currPopupType || !mfp.currTemplate.closeBtn) {
+			mfp.currTemplate.closeBtn = $( mfp.st.closeMarkup.replace('%title%', mfp.st.tClose ) );
+			_currPopupType = type;
+		}
+		return mfp.currTemplate.closeBtn;
+	},
+	// Initialize Magnific Popup only when called at least once
+	_checkInstance = function() {
+		if(!$.magnificPopup.instance) {
+			mfp = new MagnificPopup();
+			mfp.init();
+			$.magnificPopup.instance = mfp;
+		}
+	},
+	// CSS transition detection, http://stackoverflow.com/questions/7264899/detect-css-transitions-using-javascript-and-without-modernizr
+	supportsTransitions = function() {
+		var s = document.createElement('p').style, // 's' for style. better to create an element if body yet to exist
+			v = ['ms','O','Moz','Webkit']; // 'v' for vendor
+
+		if( s['transition'] !== undefined ) {
+			return true; 
+		}
+			
+		while( v.length ) {
+			if( v.pop() + 'Transition' in s ) {
+				return true;
+			}
+		}
+				
+		return false;
+	};
+
+
+
+/**
+ * Public functions
+ */
+MagnificPopup.prototype = {
+
+	constructor: MagnificPopup,
+
+	/**
+	 * Initializes Magnific Popup plugin. 
+	 * This function is triggered only once when $.fn.magnificPopup or $.magnificPopup is executed
+	 */
+	init: function() {
+		var appVersion = navigator.appVersion;
+		mfp.isIE7 = appVersion.indexOf("MSIE 7.") !== -1; 
+		mfp.isIE8 = appVersion.indexOf("MSIE 8.") !== -1;
+		mfp.isLowIE = mfp.isIE7 || mfp.isIE8;
+		mfp.isAndroid = (/android/gi).test(appVersion);
+		mfp.isIOS = (/iphone|ipad|ipod/gi).test(appVersion);
+		mfp.supportsTransition = supportsTransitions();
+
+		// We disable fixed positioned lightbox on devices that don't handle it nicely.
+		// If you know a better way of detecting this - let me know.
+		mfp.probablyMobile = (mfp.isAndroid || mfp.isIOS || /(Opera Mini)|Kindle|webOS|BlackBerry|(Opera Mobi)|(Windows Phone)|IEMobile/i.test(navigator.userAgent) );
+		_document = $(document);
+
+		mfp.popupsCache = {};
+	},
+
+	/**
+	 * Opens popup
+	 * @param  data [description]
+	 */
+	open: function(data) {
+
+		if(!_body) {
+			_body = $(document.body);
+		}
+
+		var i;
+
+		if(data.isObj === false) { 
+			// convert jQuery collection to array to avoid conflicts later
+			mfp.items = data.items.toArray();
+
+			mfp.index = 0;
+			var items = data.items,
+				item;
+			for(i = 0; i < items.length; i++) {
+				item = items[i];
+				if(item.parsed) {
+					item = item.el[0];
+				}
+				if(item === data.el[0]) {
+					mfp.index = i;
+					break;
+				}
+			}
+		} else {
+			mfp.items = $.isArray(data.items) ? data.items : [data.items];
+			mfp.index = data.index || 0;
+		}
+
+		// if popup is already opened - we just update the content
+		if(mfp.isOpen) {
+			mfp.updateItemHTML();
+			return;
+		}
+		
+		mfp.types = []; 
+		_wrapClasses = '';
+		if(data.mainEl && data.mainEl.length) {
+			mfp.ev = data.mainEl.eq(0);
+		} else {
+			mfp.ev = _document;
+		}
+
+		if(data.key) {
+			if(!mfp.popupsCache[data.key]) {
+				mfp.popupsCache[data.key] = {};
+			}
+			mfp.currTemplate = mfp.popupsCache[data.key];
+		} else {
+			mfp.currTemplate = {};
+		}
+
+
+
+		mfp.st = $.extend(true, {}, $.magnificPopup.defaults, data ); 
+		mfp.fixedContentPos = mfp.st.fixedContentPos === 'auto' ? !mfp.probablyMobile : mfp.st.fixedContentPos;
+
+		if(mfp.st.modal) {
+			mfp.st.closeOnContentClick = false;
+			mfp.st.closeOnBgClick = false;
+			mfp.st.showCloseBtn = false;
+			mfp.st.enableEscapeKey = false;
+		}
+		
+
+		// Building markup
+		// main containers are created only once
+		if(!mfp.bgOverlay) {
+
+			// Dark overlay
+			mfp.bgOverlay = _getEl('bg').on('click'+EVENT_NS, function() {
+				mfp.close();
+			});
+
+			mfp.wrap = _getEl('wrap').attr('tabindex', -1).on('click'+EVENT_NS, function(e) {
+				if(mfp._checkIfClose(e.target)) {
+					mfp.close();
+				}
+			});
+
+			mfp.container = _getEl('container', mfp.wrap);
+		}
+
+		mfp.contentContainer = _getEl('content');
+		if(mfp.st.preloader) {
+			mfp.preloader = _getEl('preloader', mfp.container, mfp.st.tLoading);
+		}
+
+
+		// Initializing modules
+		var modules = $.magnificPopup.modules;
+		for(i = 0; i < modules.length; i++) {
+			var n = modules[i];
+			n = n.charAt(0).toUpperCase() + n.slice(1);
+			mfp['init'+n].call(mfp);
+		}
+		_mfpTrigger('BeforeOpen');
+
+
+		if(mfp.st.showCloseBtn) {
+			// Close button
+			if(!mfp.st.closeBtnInside) {
+				mfp.wrap.append( _getCloseBtn() );
+			} else {
+				_mfpOn(MARKUP_PARSE_EVENT, function(e, template, values, item) {
+					values.close_replaceWith = _getCloseBtn(item.type);
+				});
+				_wrapClasses += ' mfp-close-btn-in';
+			}
+		}
+
+		if(mfp.st.alignTop) {
+			_wrapClasses += ' mfp-align-top';
+		}
+
+	
+
+		if(mfp.fixedContentPos) {
+			mfp.wrap.css({
+				overflow: mfp.st.overflowY,
+				overflowX: 'hidden',
+				overflowY: mfp.st.overflowY
+			});
+		} else {
+			mfp.wrap.css({ 
+				top: _window.scrollTop(),
+				position: 'absolute'
+			});
+		}
+		if( mfp.st.fixedBgPos === false || (mfp.st.fixedBgPos === 'auto' && !mfp.fixedContentPos) ) {
+			mfp.bgOverlay.css({
+				height: _document.height(),
+				position: 'absolute'
+			});
+		}
+
+		
+
+		if(mfp.st.enableEscapeKey) {
+			// Close on ESC key
+			_document.on('keyup' + EVENT_NS, function(e) {
+				if(e.keyCode === 27) {
+					mfp.close();
+				}
+			});
+		}
+
+		_window.on('resize' + EVENT_NS, function() {
+			mfp.updateSize();
+		});
+
+
+		if(!mfp.st.closeOnContentClick) {
+			_wrapClasses += ' mfp-auto-cursor';
+		}
+		
+		if(_wrapClasses)
+			mfp.wrap.addClass(_wrapClasses);
+
+
+		// this triggers recalculation of layout, so we get it once to not to trigger twice
+		var windowHeight = mfp.wH = _window.height();
+
+		
+		var windowStyles = {};
+
+		if( mfp.fixedContentPos ) {
+            if(mfp._hasScrollBar(windowHeight)){
+                var s = mfp._getScrollbarSize();
+                if(s) {
+                    windowStyles.marginRight = s;
+                }
+            }
+        }
+
+		if(mfp.fixedContentPos) {
+			if(!mfp.isIE7) {
+				windowStyles.overflow = 'hidden';
+			} else {
+				// ie7 double-scroll bug
+				$('body, html').css('overflow', 'hidden');
+			}
+		}
+
+		
+		
+		var classesToadd = mfp.st.mainClass;
+		if(mfp.isIE7) {
+			classesToadd += ' mfp-ie7';
+		}
+		if(classesToadd) {
+			mfp._addClassToMFP( classesToadd );
+		}
+
+		// add content
+		mfp.updateItemHTML();
+
+		_mfpTrigger('BuildControls');
+
+		// remove scrollbar, add margin e.t.c
+		$('html').css(windowStyles);
+		
+		// add everything to DOM
+		mfp.bgOverlay.add(mfp.wrap).prependTo( mfp.st.prependTo || _body );
+
+		// Save last focused element
+		mfp._lastFocusedEl = document.activeElement;
+		
+		// Wait for next cycle to allow CSS transition
+		setTimeout(function() {
+			
+			if(mfp.content) {
+				mfp._addClassToMFP(READY_CLASS);
+				mfp._setFocus();
+			} else {
+				// if content is not defined (not loaded e.t.c) we add class only for BG
+				mfp.bgOverlay.addClass(READY_CLASS);
+			}
+			
+			// Trap the focus in popup
+			_document.on('focusin' + EVENT_NS, mfp._onFocusIn);
+
+		}, 16);
+
+		mfp.isOpen = true;
+		mfp.updateSize(windowHeight);
+		_mfpTrigger(OPEN_EVENT);
+
+		return data;
+	},
+
+	/**
+	 * Closes the popup
+	 */
+	close: function() {
+		if(!mfp.isOpen) return;
+		_mfpTrigger(BEFORE_CLOSE_EVENT);
+
+		mfp.isOpen = false;
+		// for CSS3 animation
+		if(mfp.st.removalDelay && !mfp.isLowIE && mfp.supportsTransition )  {
+			mfp._addClassToMFP(REMOVING_CLASS);
+			setTimeout(function() {
+				mfp._close();
+			}, mfp.st.removalDelay);
+		} else {
+			mfp._close();
+		}
+	},
+
+	/**
+	 * Helper for close() function
+	 */
+	_close: function() {
+		_mfpTrigger(CLOSE_EVENT);
+
+		var classesToRemove = REMOVING_CLASS + ' ' + READY_CLASS + ' ';
+
+		mfp.bgOverlay.detach();
+		mfp.wrap.detach();
+		mfp.container.empty();
+
+		if(mfp.st.mainClass) {
+			classesToRemove += mfp.st.mainClass + ' ';
+		}
+
+		mfp._removeClassFromMFP(classesToRemove);
+
+		if(mfp.fixedContentPos) {
+			var windowStyles = {marginRight: ''};
+			if(mfp.isIE7) {
+				$('body, html').css('overflow', '');
+			} else {
+				windowStyles.overflow = '';
+			}
+			$('html').css(windowStyles);
+		}
+		
+		_document.off('keyup' + EVENT_NS + ' focusin' + EVENT_NS);
+		mfp.ev.off(EVENT_NS);
+
+		// clean up DOM elements that aren't removed
+		mfp.wrap.attr('class', 'mfp-wrap').removeAttr('style');
+		mfp.bgOverlay.attr('class', 'mfp-bg');
+		mfp.container.attr('class', 'mfp-container');
+
+		// remove close button from target element
+		if(mfp.st.showCloseBtn &&
+		(!mfp.st.closeBtnInside || mfp.currTemplate[mfp.currItem.type] === true)) {
+			if(mfp.currTemplate.closeBtn)
+				mfp.currTemplate.closeBtn.detach();
+		}
+
+
+		if(mfp._lastFocusedEl) {
+			$(mfp._lastFocusedEl).focus(); // put tab focus back
+		}
+		mfp.currItem = null;	
+		mfp.content = null;
+		mfp.currTemplate = null;
+		mfp.prevHeight = 0;
+
+		_mfpTrigger(AFTER_CLOSE_EVENT);
+	},
+	
+	updateSize: function(winHeight) {
+
+		if(mfp.isIOS) {
+			// fixes iOS nav bars https://github.com/dimsemenov/Magnific-Popup/issues/2
+			var zoomLevel = document.documentElement.clientWidth / window.innerWidth;
+			var height = window.innerHeight * zoomLevel;
+			mfp.wrap.css('height', height);
+			mfp.wH = height;
+		} else {
+			mfp.wH = winHeight || _window.height();
+		}
+		// Fixes #84: popup incorrectly positioned with position:relative on body
+		if(!mfp.fixedContentPos) {
+			mfp.wrap.css('height', mfp.wH);
+		}
+
+		_mfpTrigger('Resize');
+
+	},
+
+	/**
+	 * Set content of popup based on current index
+	 */
+	updateItemHTML: function() {
+		var item = mfp.items[mfp.index];
+
+		// Detach and perform modifications
+		mfp.contentContainer.detach();
+
+		if(mfp.content)
+			mfp.content.detach();
+
+		if(!item.parsed) {
+			item = mfp.parseEl( mfp.index );
+		}
+
+		var type = item.type;	
+
+		_mfpTrigger('BeforeChange', [mfp.currItem ? mfp.currItem.type : '', type]);
+		// BeforeChange event works like so:
+		// _mfpOn('BeforeChange', function(e, prevType, newType) { });
+		
+		mfp.currItem = item;
+
+		
+
+		
+
+		if(!mfp.currTemplate[type]) {
+			var markup = mfp.st[type] ? mfp.st[type].markup : false;
+
+			// allows to modify markup
+			_mfpTrigger('FirstMarkupParse', markup);
+
+			if(markup) {
+				mfp.currTemplate[type] = $(markup);
+			} else {
+				// if there is no markup found we just define that template is parsed
+				mfp.currTemplate[type] = true;
+			}
+		}
+
+		if(_prevContentType && _prevContentType !== item.type) {
+			mfp.container.removeClass('mfp-'+_prevContentType+'-holder');
+		}
+		
+		var newContent = mfp['get' + type.charAt(0).toUpperCase() + type.slice(1)](item, mfp.currTemplate[type]);
+		mfp.appendContent(newContent, type);
+
+		item.preloaded = true;
+
+		_mfpTrigger(CHANGE_EVENT, item);
+		_prevContentType = item.type;
+		
+		// Append container back after its content changed
+		mfp.container.prepend(mfp.contentContainer);
+
+		_mfpTrigger('AfterChange');
+	},
+
+
+	/**
+	 * Set HTML content of popup
+	 */
+	appendContent: function(newContent, type) {
+		mfp.content = newContent;
+		
+		if(newContent) {
+			if(mfp.st.showCloseBtn && mfp.st.closeBtnInside &&
+				mfp.currTemplate[type] === true) {
+				// if there is no markup, we just append close button element inside
+				if(!mfp.content.find('.mfp-close').length) {
+					mfp.content.append(_getCloseBtn());
+				}
+			} else {
+				mfp.content = newContent;
+			}
+		} else {
+			mfp.content = '';
+		}
+
+		_mfpTrigger(BEFORE_APPEND_EVENT);
+		mfp.container.addClass('mfp-'+type+'-holder');
+
+		mfp.contentContainer.append(mfp.content);
+	},
+
+
+
+	
+	/**
+	 * Creates Magnific Popup data object based on given data
+	 * @param  {int} index Index of item to parse
+	 */
+	parseEl: function(index) {
+		var item = mfp.items[index],
+			type;
+
+		if(item.tagName) {
+			item = { el: $(item) };
+		} else {
+			type = item.type;
+			item = { data: item, src: item.src };
+		}
+
+		if(item.el) {
+			var types = mfp.types;
+
+			// check for 'mfp-TYPE' class
+			for(var i = 0; i < types.length; i++) {
+				if( item.el.hasClass('mfp-'+types[i]) ) {
+					type = types[i];
+					break;
+				}
+			}
+
+			item.src = item.el.attr('data-mfp-src');
+			if(!item.src) {
+				item.src = item.el.attr('href');
+			}
+		}
+
+		item.type = type || mfp.st.type || 'inline';
+		item.index = index;
+		item.parsed = true;
+		mfp.items[index] = item;
+		_mfpTrigger('ElementParse', item);
+
+		return mfp.items[index];
+	},
+
+
+	/**
+	 * Initializes single popup or a group of popups
+	 */
+	addGroup: function(el, options) {
+		var eHandler = function(e) {
+			e.mfpEl = this;
+			mfp._openClick(e, el, options);
+		};
+
+		if(!options) {
+			options = {};
+		} 
+
+		var eName = 'click.magnificPopup';
+		options.mainEl = el;
+		
+		if(options.items) {
+			options.isObj = true;
+			el.off(eName).on(eName, eHandler);
+		} else {
+			options.isObj = false;
+			if(options.delegate) {
+				el.off(eName).on(eName, options.delegate , eHandler);
+			} else {
+				options.items = el;
+				el.off(eName).on(eName, eHandler);
+			}
+		}
+	},
+	_openClick: function(e, el, options) {
+		var midClick = options.midClick !== undefined ? options.midClick : $.magnificPopup.defaults.midClick;
+
+
+		if(!midClick && ( e.which === 2 || e.ctrlKey || e.metaKey ) ) {
+			return;
+		}
+
+		var disableOn = options.disableOn !== undefined ? options.disableOn : $.magnificPopup.defaults.disableOn;
+
+		if(disableOn) {
+			if($.isFunction(disableOn)) {
+				if( !disableOn.call(mfp) ) {
+					return true;
+				}
+			} else { // else it's number
+				if( _window.width() < disableOn ) {
+					return true;
+				}
+			}
+		}
+		
+		if(e.type) {
+			e.preventDefault();
+
+			// This will prevent popup from closing if element is inside and popup is already opened
+			if(mfp.isOpen) {
+				e.stopPropagation();
+			}
+		}
+			
+
+		options.el = $(e.mfpEl);
+		if(options.delegate) {
+			options.items = el.find(options.delegate);
+		}
+		mfp.open(options);
+	},
+
+
+	/**
+	 * Updates text on preloader
+	 */
+	updateStatus: function(status, text) {
+
+		if(mfp.preloader) {
+			if(_prevStatus !== status) {
+				mfp.container.removeClass('mfp-s-'+_prevStatus);
+			}
+
+			if(!text && status === 'loading') {
+				text = mfp.st.tLoading;
+			}
+
+			var data = {
+				status: status,
+				text: text
+			};
+			// allows to modify status
+			_mfpTrigger('UpdateStatus', data);
+
+			status = data.status;
+			text = data.text;
+
+			mfp.preloader.html(text);
+
+			mfp.preloader.find('a').on('click', function(e) {
+				e.stopImmediatePropagation();
+			});
+
+			mfp.container.addClass('mfp-s-'+status);
+			_prevStatus = status;
+		}
+	},
+
+
+	/*
+		"Private" helpers that aren't private at all
+	 */
+	// Check to close popup or not
+	// "target" is an element that was clicked
+	_checkIfClose: function(target) {
+
+		if($(target).hasClass(PREVENT_CLOSE_CLASS)) {
+			return;
+		}
+
+		var closeOnContent = mfp.st.closeOnContentClick;
+		var closeOnBg = mfp.st.closeOnBgClick;
+
+		if(closeOnContent && closeOnBg) {
+			return true;
+		} else {
+
+			// We close the popup if click is on close button or on preloader. Or if there is no content.
+			if(!mfp.content || $(target).hasClass('mfp-close') || (mfp.preloader && target === mfp.preloader[0]) ) {
+				return true;
+			}
+
+			// if click is outside the content
+			if(  (target !== mfp.content[0] && !$.contains(mfp.content[0], target))  ) {
+				if(closeOnBg) {
+					// last check, if the clicked element is in DOM, (in case it's removed onclick)
+					if( $.contains(document, target) ) {
+						return true;
+					}
+				}
+			} else if(closeOnContent) {
+				return true;
+			}
+
+		}
+		return false;
+	},
+	_addClassToMFP: function(cName) {
+		mfp.bgOverlay.addClass(cName);
+		mfp.wrap.addClass(cName);
+	},
+	_removeClassFromMFP: function(cName) {
+		this.bgOverlay.removeClass(cName);
+		mfp.wrap.removeClass(cName);
+	},
+	_hasScrollBar: function(winHeight) {
+		return (  (mfp.isIE7 ? _document.height() : document.body.scrollHeight) > (winHeight || _window.height()) );
+	},
+	_setFocus: function() {
+		(mfp.st.focus ? mfp.content.find(mfp.st.focus).eq(0) : mfp.wrap).focus();
+	},
+	_onFocusIn: function(e) {
+		if( e.target !== mfp.wrap[0] && !$.contains(mfp.wrap[0], e.target) ) {
+			mfp._setFocus();
+			return false;
+		}
+	},
+	_parseMarkup: function(template, values, item) {
+		var arr;
+		if(item.data) {
+			values = $.extend(item.data, values);
+		}
+		_mfpTrigger(MARKUP_PARSE_EVENT, [template, values, item] );
+
+		$.each(values, function(key, value) {
+			if(value === undefined || value === false) {
+				return true;
+			}
+			arr = key.split('_');
+			if(arr.length > 1) {
+				var el = template.find(EVENT_NS + '-'+arr[0]);
+
+				if(el.length > 0) {
+					var attr = arr[1];
+					if(attr === 'replaceWith') {
+						if(el[0] !== value[0]) {
+							el.replaceWith(value);
+						}
+					} else if(attr === 'img') {
+						if(el.is('img')) {
+							el.attr('src', value);
+						} else {
+							el.replaceWith( '<img src="'+value+'" class="' + el.attr('class') + '" />' );
+						}
+					} else {
+						el.attr(arr[1], value);
+					}
+				}
+
+			} else {
+				template.find(EVENT_NS + '-'+key).html(value);
+			}
+		});
+	},
+
+	_getScrollbarSize: function() {
+		// thx David
+		if(mfp.scrollbarSize === undefined) {
+			var scrollDiv = document.createElement("div");
+			scrollDiv.style.cssText = 'width: 99px; height: 99px; overflow: scroll; position: absolute; top: -9999px;';
+			document.body.appendChild(scrollDiv);
+			mfp.scrollbarSize = scrollDiv.offsetWidth - scrollDiv.clientWidth;
+			document.body.removeChild(scrollDiv);
+		}
+		return mfp.scrollbarSize;
+	}
+
+}; /* MagnificPopup core prototype end */
+
+
+
+
+/**
+ * Public static functions
+ */
+$.magnificPopup = {
+	instance: null,
+	proto: MagnificPopup.prototype,
+	modules: [],
+
+	open: function(options, index) {
+		_checkInstance();	
+
+		if(!options) {
+			options = {};
+		} else {
+			options = $.extend(true, {}, options);
+		}
+			
+
+		options.isObj = true;
+		options.index = index || 0;
+		return this.instance.open(options);
+	},
+
+	close: function() {
+		return $.magnificPopup.instance && $.magnificPopup.instance.close();
+	},
+
+	registerModule: function(name, module) {
+		if(module.options) {
+			$.magnificPopup.defaults[name] = module.options;
+		}
+		$.extend(this.proto, module.proto);			
+		this.modules.push(name);
+	},
+
+	defaults: {   
+
+		// Info about options is in docs:
+		// http://dimsemenov.com/plugins/magnific-popup/documentation.html#options
+		
+		disableOn: 0,	
+
+		key: null,
+
+		midClick: false,
+
+		mainClass: '',
+
+		preloader: true,
+
+		focus: '', // CSS selector of input to focus after popup is opened
+		
+		closeOnContentClick: false,
+
+		closeOnBgClick: true,
+
+		closeBtnInside: true, 
+
+		showCloseBtn: true,
+
+		enableEscapeKey: true,
+
+		modal: false,
+
+		alignTop: false,
+	
+		removalDelay: 0,
+
+		prependTo: null,
+		
+		fixedContentPos: 'auto', 
+	
+		fixedBgPos: 'auto',
+
+		overflowY: 'auto',
+
+		closeMarkup: '<button title="%title%" type="button" class="mfp-close">&times;</button>',
+
+		tClose: 'Close (Esc)',
+
+		tLoading: 'Loading...'
+
+	}
+};
+
+
+
+$.fn.magnificPopup = function(options) {
+	_checkInstance();
+
+	var jqEl = $(this);
+
+	// We call some API method of first param is a string
+	if (typeof options === "string" ) {
+
+		if(options === 'open') {
+			var items,
+				itemOpts = _isJQ ? jqEl.data('magnificPopup') : jqEl[0].magnificPopup,
+				index = parseInt(arguments[1], 10) || 0;
+
+			if(itemOpts.items) {
+				items = itemOpts.items[index];
+			} else {
+				items = jqEl;
+				if(itemOpts.delegate) {
+					items = items.find(itemOpts.delegate);
+				}
+				items = items.eq( index );
+			}
+			mfp._openClick({mfpEl:items}, jqEl, itemOpts);
+		} else {
+			if(mfp.isOpen)
+				mfp[options].apply(mfp, Array.prototype.slice.call(arguments, 1));
+		}
+
+	} else {
+		// clone options obj
+		options = $.extend(true, {}, options);
+		
+		/*
+		 * As Zepto doesn't support .data() method for objects 
+		 * and it works only in normal browsers
+		 * we assign "options" object directly to the DOM element. FTW!
+		 */
+		if(_isJQ) {
+			jqEl.data('magnificPopup', options);
+		} else {
+			jqEl[0].magnificPopup = options;
+		}
+
+		mfp.addGroup(jqEl, options);
+
+	}
+	return jqEl;
+};
+
+
+//Quick benchmark
+/*
+var start = performance.now(),
+	i,
+	rounds = 1000;
+
+for(i = 0; i < rounds; i++) {
+
+}
+console.log('Test #1:', performance.now() - start);
+
+start = performance.now();
+for(i = 0; i < rounds; i++) {
+
+}
+console.log('Test #2:', performance.now() - start);
+*/
+
+
+/*>>core*/
+
+/*>>inline*/
+
+var INLINE_NS = 'inline',
+	_hiddenClass,
+	_inlinePlaceholder, 
+	_lastInlineElement,
+	_putInlineElementsBack = function() {
+		if(_lastInlineElement) {
+			_inlinePlaceholder.after( _lastInlineElement.addClass(_hiddenClass) ).detach();
+			_lastInlineElement = null;
+		}
+	};
+
+$.magnificPopup.registerModule(INLINE_NS, {
+	options: {
+		hiddenClass: 'hide', // will be appended with `mfp-` prefix
+		markup: '',
+		tNotFound: 'Content not found'
+	},
+	proto: {
+
+		initInline: function() {
+			mfp.types.push(INLINE_NS);
+
+			_mfpOn(CLOSE_EVENT+'.'+INLINE_NS, function() {
+				_putInlineElementsBack();
+			});
+		},
+
+		getInline: function(item, template) {
+
+			_putInlineElementsBack();
+
+			if(item.src) {
+				var inlineSt = mfp.st.inline,
+					el = $(item.src);
+
+				if(el.length) {
+
+					// If target element has parent - we replace it with placeholder and put it back after popup is closed
+					var parent = el[0].parentNode;
+					if(parent && parent.tagName) {
+						if(!_inlinePlaceholder) {
+							_hiddenClass = inlineSt.hiddenClass;
+							_inlinePlaceholder = _getEl(_hiddenClass);
+							_hiddenClass = 'mfp-'+_hiddenClass;
+						}
+						// replace target inline element with placeholder
+						_lastInlineElement = el.after(_inlinePlaceholder).detach().removeClass(_hiddenClass);
+					}
+
+					mfp.updateStatus('ready');
+				} else {
+					mfp.updateStatus('error', inlineSt.tNotFound);
+					el = $('<div>');
+				}
+
+				item.inlineElement = el;
+				return el;
+			}
+
+			mfp.updateStatus('ready');
+			mfp._parseMarkup(template, {}, item);
+			return template;
+		}
+	}
+});
+
+/*>>inline*/
+
+/*>>ajax*/
+var AJAX_NS = 'ajax',
+	_ajaxCur,
+	_removeAjaxCursor = function() {
+		if(_ajaxCur) {
+			_body.removeClass(_ajaxCur);
+		}
+	},
+	_destroyAjaxRequest = function() {
+		_removeAjaxCursor();
+		if(mfp.req) {
+			mfp.req.abort();
+		}
+	};
+
+$.magnificPopup.registerModule(AJAX_NS, {
+
+	options: {
+		settings: null,
+		cursor: 'mfp-ajax-cur',
+		tError: '<a href="%url%">The content</a> could not be loaded.'
+	},
+
+	proto: {
+		initAjax: function() {
+			mfp.types.push(AJAX_NS);
+			_ajaxCur = mfp.st.ajax.cursor;
+
+			_mfpOn(CLOSE_EVENT+'.'+AJAX_NS, _destroyAjaxRequest);
+			_mfpOn('BeforeChange.' + AJAX_NS, _destroyAjaxRequest);
+		},
+		getAjax: function(item) {
+
+			if(_ajaxCur)
+				_body.addClass(_ajaxCur);
+
+			mfp.updateStatus('loading');
+
+			var opts = $.extend({
+				url: item.src,
+				success: function(data, textStatus, jqXHR) {
+					var temp = {
+						data:data,
+						xhr:jqXHR
+					};
+
+					_mfpTrigger('ParseAjax', temp);
+
+					mfp.appendContent( $(temp.data), AJAX_NS );
+
+					item.finished = true;
+
+					_removeAjaxCursor();
+
+					mfp._setFocus();
+
+					setTimeout(function() {
+						mfp.wrap.addClass(READY_CLASS);
+					}, 16);
+
+					mfp.updateStatus('ready');
+
+					_mfpTrigger('AjaxContentAdded');
+				},
+				error: function() {
+					_removeAjaxCursor();
+					item.finished = item.loadError = true;
+					mfp.updateStatus('error', mfp.st.ajax.tError.replace('%url%', item.src));
+				}
+			}, mfp.st.ajax.settings);
+
+			mfp.req = $.ajax(opts);
+
+			return '';
+		}
+	}
+});
+
+
+
+
+
+	
+
+/*>>ajax*/
+
+/*>>image*/
+var _imgInterval,
+	_getTitle = function(item) {
+		if(item.data && item.data.title !== undefined) 
+			return item.data.title;
+
+		var src = mfp.st.image.titleSrc;
+
+		if(src) {
+			if($.isFunction(src)) {
+				return src.call(mfp, item);
+			} else if(item.el) {
+				return item.el.attr(src) || '';
+			}
+		}
+		return '';
+	};
+
+$.magnificPopup.registerModule('image', {
+
+	options: {
+		markup: '<div class="mfp-figure">'+
+					'<div class="mfp-close"></div>'+
+					'<figure>'+
+						'<div class="mfp-img"></div>'+
+						'<figcaption>'+
+							'<div class="mfp-bottom-bar">'+
+								'<div class="mfp-title"></div>'+
+								'<div class="mfp-counter"></div>'+
+							'</div>'+
+						'</figcaption>'+
+					'</figure>'+
+				'</div>',
+		cursor: 'mfp-zoom-out-cur',
+		titleSrc: 'title', 
+		verticalFit: true,
+		tError: '<a href="%url%">The image</a> could not be loaded.'
+	},
+
+	proto: {
+		initImage: function() {
+			var imgSt = mfp.st.image,
+				ns = '.image';
+
+			mfp.types.push('image');
+
+			_mfpOn(OPEN_EVENT+ns, function() {
+				if(mfp.currItem.type === 'image' && imgSt.cursor) {
+					_body.addClass(imgSt.cursor);
+				}
+			});
+
+			_mfpOn(CLOSE_EVENT+ns, function() {
+				if(imgSt.cursor) {
+					_body.removeClass(imgSt.cursor);
+				}
+				_window.off('resize' + EVENT_NS);
+			});
+
+			_mfpOn('Resize'+ns, mfp.resizeImage);
+			if(mfp.isLowIE) {
+				_mfpOn('AfterChange', mfp.resizeImage);
+			}
+		},
+		resizeImage: function() {
+			var item = mfp.currItem;
+			if(!item || !item.img) return;
+
+			if(mfp.st.image.verticalFit) {
+				var decr = 0;
+				// fix box-sizing in ie7/8
+				if(mfp.isLowIE) {
+					decr = parseInt(item.img.css('padding-top'), 10) + parseInt(item.img.css('padding-bottom'),10);
+				}
+				item.img.css('max-height', mfp.wH-decr);
+			}
+		},
+		_onImageHasSize: function(item) {
+			if(item.img) {
+				
+				item.hasSize = true;
+
+				if(_imgInterval) {
+					clearInterval(_imgInterval);
+				}
+				
+				item.isCheckingImgSize = false;
+
+				_mfpTrigger('ImageHasSize', item);
+
+				if(item.imgHidden) {
+					if(mfp.content)
+						mfp.content.removeClass('mfp-loading');
+					
+					item.imgHidden = false;
+				}
+
+			}
+		},
+
+		/**
+		 * Function that loops until the image has size to display elements that rely on it asap
+		 */
+		findImageSize: function(item) {
+
+			var counter = 0,
+				img = item.img[0],
+				mfpSetInterval = function(delay) {
+
+					if(_imgInterval) {
+						clearInterval(_imgInterval);
+					}
+					// decelerating interval that checks for size of an image
+					_imgInterval = setInterval(function() {
+						if(img.naturalWidth > 0) {
+							mfp._onImageHasSize(item);
+							return;
+						}
+
+						if(counter > 200) {
+							clearInterval(_imgInterval);
+						}
+
+						counter++;
+						if(counter === 3) {
+							mfpSetInterval(10);
+						} else if(counter === 40) {
+							mfpSetInterval(50);
+						} else if(counter === 100) {
+							mfpSetInterval(500);
+						}
+					}, delay);
+				};
+
+			mfpSetInterval(1);
+		},
+
+		getImage: function(item, template) {
+
+			var guard = 0,
+
+				// image load complete handler
+				onLoadComplete = function() {
+					if(item) {
+						if (item.img[0].complete) {
+							item.img.off('.mfploader');
+							
+							if(item === mfp.currItem){
+								mfp._onImageHasSize(item);
+
+								mfp.updateStatus('ready');
+							}
+
+							item.hasSize = true;
+							item.loaded = true;
+
+							_mfpTrigger('ImageLoadComplete');
+							
+						}
+						else {
+							// if image complete check fails 200 times (20 sec), we assume that there was an error.
+							guard++;
+							if(guard < 200) {
+								setTimeout(onLoadComplete,100);
+							} else {
+								onLoadError();
+							}
+						}
+					}
+				},
+
+				// image error handler
+				onLoadError = function() {
+					if(item) {
+						item.img.off('.mfploader');
+						if(item === mfp.currItem){
+							mfp._onImageHasSize(item);
+							mfp.updateStatus('error', imgSt.tError.replace('%url%', item.src) );
+						}
+
+						item.hasSize = true;
+						item.loaded = true;
+						item.loadError = true;
+					}
+				},
+				imgSt = mfp.st.image;
+
+
+			var el = template.find('.mfp-img');
+			if(el.length) {
+				var img = document.createElement('img');
+				img.className = 'mfp-img';
+				if(item.el && item.el.find('img').length) {
+					img.alt = item.el.find('img').attr('alt');
+				}
+				item.img = $(img).on('load.mfploader', onLoadComplete).on('error.mfploader', onLoadError);
+				img.src = item.src;
+
+				// without clone() "error" event is not firing when IMG is replaced by new IMG
+				// TODO: find a way to avoid such cloning
+				if(el.is('img')) {
+					item.img = item.img.clone();
+				}
+
+				img = item.img[0];
+				if(img.naturalWidth > 0) {
+					item.hasSize = true;
+				} else if(!img.width) {										
+					item.hasSize = false;
+				}
+			}
+
+			mfp._parseMarkup(template, {
+				title: _getTitle(item),
+				img_replaceWith: item.img
+			}, item);
+
+			mfp.resizeImage();
+
+			if(item.hasSize) {
+				if(_imgInterval) clearInterval(_imgInterval);
+
+				if(item.loadError) {
+					template.addClass('mfp-loading');
+					mfp.updateStatus('error', imgSt.tError.replace('%url%', item.src) );
+				} else {
+					template.removeClass('mfp-loading');
+					mfp.updateStatus('ready');
+				}
+				return template;
+			}
+
+			mfp.updateStatus('loading');
+			item.loading = true;
+
+			if(!item.hasSize) {
+				item.imgHidden = true;
+				template.addClass('mfp-loading');
+				mfp.findImageSize(item);
+			} 
+
+			return template;
+		}
+	}
+});
+
+
+
+/*>>image*/
+
+/*>>zoom*/
+var hasMozTransform,
+	getHasMozTransform = function() {
+		if(hasMozTransform === undefined) {
+			hasMozTransform = document.createElement('p').style.MozTransform !== undefined;
+		}
+		return hasMozTransform;		
+	};
+
+$.magnificPopup.registerModule('zoom', {
+
+	options: {
+		enabled: false,
+		easing: 'ease-in-out',
+		duration: 300,
+		opener: function(element) {
+			return element.is('img') ? element : element.find('img');
+		}
+	},
+
+	proto: {
+
+		initZoom: function() {
+			var zoomSt = mfp.st.zoom,
+				ns = '.zoom',
+				image;
+				
+			if(!zoomSt.enabled || !mfp.supportsTransition) {
+				return;
+			}
+
+			var duration = zoomSt.duration,
+				getElToAnimate = function(image) {
+					var newImg = image.clone().removeAttr('style').removeAttr('class').addClass('mfp-animated-image'),
+						transition = 'all '+(zoomSt.duration/1000)+'s ' + zoomSt.easing,
+						cssObj = {
+							position: 'fixed',
+							zIndex: 9999,
+							left: 0,
+							top: 0,
+							'-webkit-backface-visibility': 'hidden'
+						},
+						t = 'transition';
+
+					cssObj['-webkit-'+t] = cssObj['-moz-'+t] = cssObj['-o-'+t] = cssObj[t] = transition;
+
+					newImg.css(cssObj);
+					return newImg;
+				},
+				showMainContent = function() {
+					mfp.content.css('visibility', 'visible');
+				},
+				openTimeout,
+				animatedImg;
+
+			_mfpOn('BuildControls'+ns, function() {
+				if(mfp._allowZoom()) {
+
+					clearTimeout(openTimeout);
+					mfp.content.css('visibility', 'hidden');
+
+					// Basically, all code below does is clones existing image, puts in on top of the current one and animated it
+					
+					image = mfp._getItemToZoom();
+
+					if(!image) {
+						showMainContent();
+						return;
+					}
+
+					animatedImg = getElToAnimate(image); 
+					
+					animatedImg.css( mfp._getOffset() );
+
+					mfp.wrap.append(animatedImg);
+
+					openTimeout = setTimeout(function() {
+						animatedImg.css( mfp._getOffset( true ) );
+						openTimeout = setTimeout(function() {
+
+							showMainContent();
+
+							setTimeout(function() {
+								animatedImg.remove();
+								image = animatedImg = null;
+								_mfpTrigger('ZoomAnimationEnded');
+							}, 16); // avoid blink when switching images 
+
+						}, duration); // this timeout equals animation duration
+
+					}, 16); // by adding this timeout we avoid short glitch at the beginning of animation
+
+
+					// Lots of timeouts...
+				}
+			});
+			_mfpOn(BEFORE_CLOSE_EVENT+ns, function() {
+				if(mfp._allowZoom()) {
+
+					clearTimeout(openTimeout);
+
+					mfp.st.removalDelay = duration;
+
+					if(!image) {
+						image = mfp._getItemToZoom();
+						if(!image) {
+							return;
+						}
+						animatedImg = getElToAnimate(image);
+					}
+					
+					
+					animatedImg.css( mfp._getOffset(true) );
+					mfp.wrap.append(animatedImg);
+					mfp.content.css('visibility', 'hidden');
+					
+					setTimeout(function() {
+						animatedImg.css( mfp._getOffset() );
+					}, 16);
+				}
+
+			});
+
+			_mfpOn(CLOSE_EVENT+ns, function() {
+				if(mfp._allowZoom()) {
+					showMainContent();
+					if(animatedImg) {
+						animatedImg.remove();
+					}
+					image = null;
+				}	
+			});
+		},
+
+		_allowZoom: function() {
+			return mfp.currItem.type === 'image';
+		},
+
+		_getItemToZoom: function() {
+			if(mfp.currItem.hasSize) {
+				return mfp.currItem.img;
+			} else {
+				return false;
+			}
+		},
+
+		// Get element postion relative to viewport
+		_getOffset: function(isLarge) {
+			var el;
+			if(isLarge) {
+				el = mfp.currItem.img;
+			} else {
+				el = mfp.st.zoom.opener(mfp.currItem.el || mfp.currItem);
+			}
+
+			var offset = el.offset();
+			var paddingTop = parseInt(el.css('padding-top'),10);
+			var paddingBottom = parseInt(el.css('padding-bottom'),10);
+			offset.top -= ( $(window).scrollTop() - paddingTop );
+
+
+			/*
+			
+			Animating left + top + width/height looks glitchy in Firefox, but perfect in Chrome. And vice-versa.
+
+			 */
+			var obj = {
+				width: el.width(),
+				// fix Zepto height+padding issue
+				height: (_isJQ ? el.innerHeight() : el[0].offsetHeight) - paddingBottom - paddingTop
+			};
+
+			// I hate to do this, but there is no another option
+			if( getHasMozTransform() ) {
+				obj['-moz-transform'] = obj['transform'] = 'translate(' + offset.left + 'px,' + offset.top + 'px)';
+			} else {
+				obj.left = offset.left;
+				obj.top = offset.top;
+			}
+			return obj;
+		}
+
+	}
+});
+
+
+
+/*>>zoom*/
+
+/*>>iframe*/
+
+var IFRAME_NS = 'iframe',
+	_emptyPage = '//about:blank',
+	
+	_fixIframeBugs = function(isShowing) {
+		if(mfp.currTemplate[IFRAME_NS]) {
+			var el = mfp.currTemplate[IFRAME_NS].find('iframe');
+			if(el.length) { 
+				// reset src after the popup is closed to avoid "video keeps playing after popup is closed" bug
+				if(!isShowing) {
+					el[0].src = _emptyPage;
+				}
+
+				// IE8 black screen bug fix
+				if(mfp.isIE8) {
+					el.css('display', isShowing ? 'block' : 'none');
+				}
+			}
+		}
+	};
+
+$.magnificPopup.registerModule(IFRAME_NS, {
+
+	options: {
+		markup: '<div class="mfp-iframe-scaler">'+
+					'<div class="mfp-close"></div>'+
+					'<iframe class="mfp-iframe" src="//about:blank" frameborder="0" allowfullscreen></iframe>'+
+				'</div>',
+
+		srcAction: 'iframe_src',
+
+		// we don't care and support only one default type of URL by default
+		patterns: {
+			youtube: {
+				index: 'youtube.com', 
+				id: 'v=', 
+				src: '//www.youtube.com/embed/%id%?autoplay=1'
+			},
+			vimeo: {
+				index: 'vimeo.com/',
+				id: '/',
+				src: '//player.vimeo.com/video/%id%?autoplay=1'
+			},
+			gmaps: {
+				index: '//maps.google.',
+				src: '%id%&output=embed'
+			}
+		}
+	},
+
+	proto: {
+		initIframe: function() {
+			mfp.types.push(IFRAME_NS);
+
+			_mfpOn('BeforeChange', function(e, prevType, newType) {
+				if(prevType !== newType) {
+					if(prevType === IFRAME_NS) {
+						_fixIframeBugs(); // iframe if removed
+					} else if(newType === IFRAME_NS) {
+						_fixIframeBugs(true); // iframe is showing
+					} 
+				}// else {
+					// iframe source is switched, don't do anything
+				//}
+			});
+
+			_mfpOn(CLOSE_EVENT + '.' + IFRAME_NS, function() {
+				_fixIframeBugs();
+			});
+		},
+
+		getIframe: function(item, template) {
+			var embedSrc = item.src;
+			var iframeSt = mfp.st.iframe;
+				
+			$.each(iframeSt.patterns, function() {
+				if(embedSrc.indexOf( this.index ) > -1) {
+					if(this.id) {
+						if(typeof this.id === 'string') {
+							embedSrc = embedSrc.substr(embedSrc.lastIndexOf(this.id)+this.id.length, embedSrc.length);
+						} else {
+							embedSrc = this.id.call( this, embedSrc );
+						}
+					}
+					embedSrc = this.src.replace('%id%', embedSrc );
+					return false; // break;
+				}
+			});
+			
+			var dataObj = {};
+			if(iframeSt.srcAction) {
+				dataObj[iframeSt.srcAction] = embedSrc;
+			}
+			mfp._parseMarkup(template, dataObj, item);
+
+			mfp.updateStatus('ready');
+
+			return template;
+		}
+	}
+});
+
+
+
+/*>>iframe*/
+
+/*>>gallery*/
+/**
+ * Get looped index depending on number of slides
+ */
+var _getLoopedId = function(index) {
+		var numSlides = mfp.items.length;
+		if(index > numSlides - 1) {
+			return index - numSlides;
+		} else  if(index < 0) {
+			return numSlides + index;
+		}
+		return index;
+	},
+	_replaceCurrTotal = function(text, curr, total) {
+		return text.replace(/%curr%/gi, curr + 1).replace(/%total%/gi, total);
+	};
+
+$.magnificPopup.registerModule('gallery', {
+
+	options: {
+		enabled: false,
+		arrowMarkup: '<button title="%title%" type="button" class="mfp-arrow mfp-arrow-%dir%"></button>',
+		preload: [0,2],
+		navigateByImgClick: true,
+		arrows: true,
+
+		tPrev: 'Previous (Left arrow key)',
+		tNext: 'Next (Right arrow key)',
+		tCounter: '%curr% of %total%'
+	},
+
+	proto: {
+		initGallery: function() {
+
+			var gSt = mfp.st.gallery,
+				ns = '.mfp-gallery',
+				supportsFastClick = Boolean($.fn.mfpFastClick);
+
+			mfp.direction = true; // true - next, false - prev
+			
+			if(!gSt || !gSt.enabled ) return false;
+
+			_wrapClasses += ' mfp-gallery';
+
+			_mfpOn(OPEN_EVENT+ns, function() {
+
+				if(gSt.navigateByImgClick) {
+					mfp.wrap.on('click'+ns, '.mfp-img', function() {
+						if(mfp.items.length > 1) {
+							mfp.next();
+							return false;
+						}
+					});
+				}
+
+				_document.on('keydown'+ns, function(e) {
+					if (e.keyCode === 37) {
+						mfp.prev();
+					} else if (e.keyCode === 39) {
+						mfp.next();
+					}
+				});
+			});
+
+			_mfpOn('UpdateStatus'+ns, function(e, data) {
+				if(data.text) {
+					data.text = _replaceCurrTotal(data.text, mfp.currItem.index, mfp.items.length);
+				}
+			});
+
+			_mfpOn(MARKUP_PARSE_EVENT+ns, function(e, element, values, item) {
+				var l = mfp.items.length;
+				values.counter = l > 1 ? _replaceCurrTotal(gSt.tCounter, item.index, l) : '';
+			});
+
+			_mfpOn('BuildControls' + ns, function() {
+				if(mfp.items.length > 1 && gSt.arrows && !mfp.arrowLeft) {
+					var markup = gSt.arrowMarkup,
+						arrowLeft = mfp.arrowLeft = $( markup.replace(/%title%/gi, gSt.tPrev).replace(/%dir%/gi, 'left') ).addClass(PREVENT_CLOSE_CLASS),			
+						arrowRight = mfp.arrowRight = $( markup.replace(/%title%/gi, gSt.tNext).replace(/%dir%/gi, 'right') ).addClass(PREVENT_CLOSE_CLASS);
+
+					var eName = supportsFastClick ? 'mfpFastClick' : 'click';
+					arrowLeft[eName](function() {
+						mfp.prev();
+					});			
+					arrowRight[eName](function() {
+						mfp.next();
+					});	
+
+					// Polyfill for :before and :after (adds elements with classes mfp-a and mfp-b)
+					if(mfp.isIE7) {
+						_getEl('b', arrowLeft[0], false, true);
+						_getEl('a', arrowLeft[0], false, true);
+						_getEl('b', arrowRight[0], false, true);
+						_getEl('a', arrowRight[0], false, true);
+					}
+
+					mfp.container.append(arrowLeft.add(arrowRight));
+				}
+			});
+
+			_mfpOn(CHANGE_EVENT+ns, function() {
+				if(mfp._preloadTimeout) clearTimeout(mfp._preloadTimeout);
+
+				mfp._preloadTimeout = setTimeout(function() {
+					mfp.preloadNearbyImages();
+					mfp._preloadTimeout = null;
+				}, 16);		
+			});
+
+
+			_mfpOn(CLOSE_EVENT+ns, function() {
+				_document.off(ns);
+				mfp.wrap.off('click'+ns);
+			
+				if(mfp.arrowLeft && supportsFastClick) {
+					mfp.arrowLeft.add(mfp.arrowRight).destroyMfpFastClick();
+				}
+				mfp.arrowRight = mfp.arrowLeft = null;
+			});
+
+		}, 
+		next: function() {
+			mfp.direction = true;
+			mfp.index = _getLoopedId(mfp.index + 1);
+			mfp.updateItemHTML();
+		},
+		prev: function() {
+			mfp.direction = false;
+			mfp.index = _getLoopedId(mfp.index - 1);
+			mfp.updateItemHTML();
+		},
+		goTo: function(newIndex) {
+			mfp.direction = (newIndex >= mfp.index);
+			mfp.index = newIndex;
+			mfp.updateItemHTML();
+		},
+		preloadNearbyImages: function() {
+			var p = mfp.st.gallery.preload,
+				preloadBefore = Math.min(p[0], mfp.items.length),
+				preloadAfter = Math.min(p[1], mfp.items.length),
+				i;
+
+			for(i = 1; i <= (mfp.direction ? preloadAfter : preloadBefore); i++) {
+				mfp._preloadItem(mfp.index+i);
+			}
+			for(i = 1; i <= (mfp.direction ? preloadBefore : preloadAfter); i++) {
+				mfp._preloadItem(mfp.index-i);
+			}
+		},
+		_preloadItem: function(index) {
+			index = _getLoopedId(index);
+
+			if(mfp.items[index].preloaded) {
+				return;
+			}
+
+			var item = mfp.items[index];
+			if(!item.parsed) {
+				item = mfp.parseEl( index );
+			}
+
+			_mfpTrigger('LazyLoad', item);
+
+			if(item.type === 'image') {
+				item.img = $('<img class="mfp-img" />').on('load.mfploader', function() {
+					item.hasSize = true;
+				}).on('error.mfploader', function() {
+					item.hasSize = true;
+					item.loadError = true;
+					_mfpTrigger('LazyLoadError', item);
+				}).attr('src', item.src);
+			}
+
+
+			item.preloaded = true;
+		}
+	}
+});
+
+/*
+Touch Support that might be implemented some day
+
+addSwipeGesture: function() {
+	var startX,
+		moved,
+		multipleTouches;
+
+		return;
+
+	var namespace = '.mfp',
+		addEventNames = function(pref, down, move, up, cancel) {
+			mfp._tStart = pref + down + namespace;
+			mfp._tMove = pref + move + namespace;
+			mfp._tEnd = pref + up + namespace;
+			mfp._tCancel = pref + cancel + namespace;
+		};
+
+	if(window.navigator.msPointerEnabled) {
+		addEventNames('MSPointer', 'Down', 'Move', 'Up', 'Cancel');
+	} else if('ontouchstart' in window) {
+		addEventNames('touch', 'start', 'move', 'end', 'cancel');
+	} else {
+		return;
+	}
+	_window.on(mfp._tStart, function(e) {
+		var oE = e.originalEvent;
+		multipleTouches = moved = false;
+		startX = oE.pageX || oE.changedTouches[0].pageX;
+	}).on(mfp._tMove, function(e) {
+		if(e.originalEvent.touches.length > 1) {
+			multipleTouches = e.originalEvent.touches.length;
+		} else {
+			//e.preventDefault();
+			moved = true;
+		}
+	}).on(mfp._tEnd + ' ' + mfp._tCancel, function(e) {
+		if(moved && !multipleTouches) {
+			var oE = e.originalEvent,
+				diff = startX - (oE.pageX || oE.changedTouches[0].pageX);
+
+			if(diff > 20) {
+				mfp.next();
+			} else if(diff < -20) {
+				mfp.prev();
+			}
+		}
+	});
+},
+*/
+
+
+/*>>gallery*/
+
+/*>>retina*/
+
+var RETINA_NS = 'retina';
+
+$.magnificPopup.registerModule(RETINA_NS, {
+	options: {
+		replaceSrc: function(item) {
+			return item.src.replace(/\.\w+$/, function(m) { return '@2x' + m; });
+		},
+		ratio: 1 // Function or number.  Set to 1 to disable.
+	},
+	proto: {
+		initRetina: function() {
+			if(window.devicePixelRatio > 1) {
+
+				var st = mfp.st.retina,
+					ratio = st.ratio;
+
+				ratio = !isNaN(ratio) ? ratio : ratio();
+
+				if(ratio > 1) {
+					_mfpOn('ImageHasSize' + '.' + RETINA_NS, function(e, item) {
+						item.img.css({
+							'max-width': item.img[0].naturalWidth / ratio,
+							'width': '100%'
+						});
+					});
+					_mfpOn('ElementParse' + '.' + RETINA_NS, function(e, item) {
+						item.src = st.replaceSrc(item, ratio);
+					});
+				}
+			}
+
+		}
+	}
+});
+
+/*>>retina*/
+
+/*>>fastclick*/
+/**
+ * FastClick event implementation. (removes 300ms delay on touch devices)
+ * Based on https://developers.google.com/mobile/articles/fast_buttons
+ *
+ * You may use it outside the Magnific Popup by calling just:
+ *
+ * $('.your-el').mfpFastClick(function() {
+ *     console.log('Clicked!');
+ * });
+ *
+ * To unbind:
+ * $('.your-el').destroyMfpFastClick();
+ * 
+ * 
+ * Note that it's a very basic and simple implementation, it blocks ghost click on the same element where it was bound.
+ * If you need something more advanced, use plugin by FT Labs https://github.com/ftlabs/fastclick
+ * 
+ */
+
+(function() {
+	var ghostClickDelay = 1000,
+		supportsTouch = 'ontouchstart' in window,
+		unbindTouchMove = function() {
+			_window.off('touchmove'+ns+' touchend'+ns);
+		},
+		eName = 'mfpFastClick',
+		ns = '.'+eName;
+
+
+	// As Zepto.js doesn't have an easy way to add custom events (like jQuery), so we implement it in this way
+	$.fn.mfpFastClick = function(callback) {
+
+		return $(this).each(function() {
+
+			var elem = $(this),
+				lock;
+
+			if( supportsTouch ) {
+
+				var timeout,
+					startX,
+					startY,
+					pointerMoved,
+					point,
+					numPointers;
+
+				elem.on('touchstart' + ns, function(e) {
+					pointerMoved = false;
+					numPointers = 1;
+
+					point = e.originalEvent ? e.originalEvent.touches[0] : e.touches[0];
+					startX = point.clientX;
+					startY = point.clientY;
+
+					_window.on('touchmove'+ns, function(e) {
+						point = e.originalEvent ? e.originalEvent.touches : e.touches;
+						numPointers = point.length;
+						point = point[0];
+						if (Math.abs(point.clientX - startX) > 10 ||
+							Math.abs(point.clientY - startY) > 10) {
+							pointerMoved = true;
+							unbindTouchMove();
+						}
+					}).on('touchend'+ns, function(e) {
+						unbindTouchMove();
+						if(pointerMoved || numPointers > 1) {
+							return;
+						}
+						lock = true;
+						e.preventDefault();
+						clearTimeout(timeout);
+						timeout = setTimeout(function() {
+							lock = false;
+						}, ghostClickDelay);
+						callback();
+					});
+				});
+
+			}
+
+			elem.on('click' + ns, function() {
+				if(!lock) {
+					callback();
+				}
+			});
+		});
+	};
+
+	$.fn.destroyMfpFastClick = function() {
+		$(this).off('touchstart' + ns + ' click' + ns);
+		if(supportsTouch) _window.off('touchmove'+ns+' touchend'+ns);
+	};
+})();
+
+/*>>fastclick*/
+ _checkInstance(); }));
+//     Underscore.js 1.8.3
+//     http://underscorejs.org
+//     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+//     Underscore may be freely distributed under the MIT license.
+
+(function() {
+
+  // Baseline setup
+  // --------------
+
+  // Establish the root object, `window` in the browser, or `exports` on the server.
+  var root = this;
+
+  // Save the previous value of the `_` variable.
+  var previousUnderscore = root._;
+
+  // Save bytes in the minified (but not gzipped) version:
+  var ArrayProto = Array.prototype, ObjProto = Object.prototype, FuncProto = Function.prototype;
+
+  // Create quick reference variables for speed access to core prototypes.
+  var
+    push             = ArrayProto.push,
+    slice            = ArrayProto.slice,
+    toString         = ObjProto.toString,
+    hasOwnProperty   = ObjProto.hasOwnProperty;
+
+  // All **ECMAScript 5** native function implementations that we hope to use
+  // are declared here.
+  var
+    nativeIsArray      = Array.isArray,
+    nativeKeys         = Object.keys,
+    nativeBind         = FuncProto.bind,
+    nativeCreate       = Object.create;
+
+  // Naked function reference for surrogate-prototype-swapping.
+  var Ctor = function(){};
+
+  // Create a safe reference to the Underscore object for use below.
+  var _ = function(obj) {
+    if (obj instanceof _) return obj;
+    if (!(this instanceof _)) return new _(obj);
+    this._wrapped = obj;
+  };
+
+  // Export the Underscore object for **Node.js**, with
+  // backwards-compatibility for the old `require()` API. If we're in
+  // the browser, add `_` as a global object.
+  if (typeof exports !== 'undefined') {
+    if (typeof module !== 'undefined' && module.exports) {
+      exports = module.exports = _;
+    }
+    exports._ = _;
+  } else {
+    root._ = _;
+  }
+
+  // Current version.
+  _.VERSION = '1.8.3';
+
+  // Internal function that returns an efficient (for current engines) version
+  // of the passed-in callback, to be repeatedly applied in other Underscore
+  // functions.
+  var optimizeCb = function(func, context, argCount) {
+    if (context === void 0) return func;
+    switch (argCount == null ? 3 : argCount) {
+      case 1: return function(value) {
+        return func.call(context, value);
+      };
+      case 2: return function(value, other) {
+        return func.call(context, value, other);
+      };
+      case 3: return function(value, index, collection) {
+        return func.call(context, value, index, collection);
+      };
+      case 4: return function(accumulator, value, index, collection) {
+        return func.call(context, accumulator, value, index, collection);
+      };
+    }
+    return function() {
+      return func.apply(context, arguments);
+    };
+  };
+
+  // A mostly-internal function to generate callbacks that can be applied
+  // to each element in a collection, returning the desired result — either
+  // identity, an arbitrary callback, a property matcher, or a property accessor.
+  var cb = function(value, context, argCount) {
+    if (value == null) return _.identity;
+    if (_.isFunction(value)) return optimizeCb(value, context, argCount);
+    if (_.isObject(value)) return _.matcher(value);
+    return _.property(value);
+  };
+  _.iteratee = function(value, context) {
+    return cb(value, context, Infinity);
+  };
+
+  // An internal function for creating assigner functions.
+  var createAssigner = function(keysFunc, undefinedOnly) {
+    return function(obj) {
+      var length = arguments.length;
+      if (length < 2 || obj == null) return obj;
+      for (var index = 1; index < length; index++) {
+        var source = arguments[index],
+            keys = keysFunc(source),
+            l = keys.length;
+        for (var i = 0; i < l; i++) {
+          var key = keys[i];
+          if (!undefinedOnly || obj[key] === void 0) obj[key] = source[key];
+        }
+      }
+      return obj;
+    };
+  };
+
+  // An internal function for creating a new object that inherits from another.
+  var baseCreate = function(prototype) {
+    if (!_.isObject(prototype)) return {};
+    if (nativeCreate) return nativeCreate(prototype);
+    Ctor.prototype = prototype;
+    var result = new Ctor;
+    Ctor.prototype = null;
+    return result;
+  };
+
+  var property = function(key) {
+    return function(obj) {
+      return obj == null ? void 0 : obj[key];
+    };
+  };
+
+  // Helper for collection methods to determine whether a collection
+  // should be iterated as an array or as an object
+  // Related: http://people.mozilla.org/~jorendorff/es6-draft.html#sec-tolength
+  // Avoids a very nasty iOS 8 JIT bug on ARM-64. #2094
+  var MAX_ARRAY_INDEX = Math.pow(2, 53) - 1;
+  var getLength = property('length');
+  var isArrayLike = function(collection) {
+    var length = getLength(collection);
+    return typeof length == 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
+  };
+
+  // Collection Functions
+  // --------------------
+
+  // The cornerstone, an `each` implementation, aka `forEach`.
+  // Handles raw objects in addition to array-likes. Treats all
+  // sparse array-likes as if they were dense.
+  _.each = _.forEach = function(obj, iteratee, context) {
+    iteratee = optimizeCb(iteratee, context);
+    var i, length;
+    if (isArrayLike(obj)) {
+      for (i = 0, length = obj.length; i < length; i++) {
+        iteratee(obj[i], i, obj);
+      }
+    } else {
+      var keys = _.keys(obj);
+      for (i = 0, length = keys.length; i < length; i++) {
+        iteratee(obj[keys[i]], keys[i], obj);
+      }
+    }
+    return obj;
+  };
+
+  // Return the results of applying the iteratee to each element.
+  _.map = _.collect = function(obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+    var keys = !isArrayLike(obj) && _.keys(obj),
+        length = (keys || obj).length,
+        results = Array(length);
+    for (var index = 0; index < length; index++) {
+      var currentKey = keys ? keys[index] : index;
+      results[index] = iteratee(obj[currentKey], currentKey, obj);
+    }
+    return results;
+  };
+
+  // Create a reducing function iterating left or right.
+  function createReduce(dir) {
+    // Optimized iterator function as using arguments.length
+    // in the main function will deoptimize the, see #1991.
+    function iterator(obj, iteratee, memo, keys, index, length) {
+      for (; index >= 0 && index < length; index += dir) {
+        var currentKey = keys ? keys[index] : index;
+        memo = iteratee(memo, obj[currentKey], currentKey, obj);
+      }
+      return memo;
+    }
+
+    return function(obj, iteratee, memo, context) {
+      iteratee = optimizeCb(iteratee, context, 4);
+      var keys = !isArrayLike(obj) && _.keys(obj),
+          length = (keys || obj).length,
+          index = dir > 0 ? 0 : length - 1;
+      // Determine the initial value if none is provided.
+      if (arguments.length < 3) {
+        memo = obj[keys ? keys[index] : index];
+        index += dir;
+      }
+      return iterator(obj, iteratee, memo, keys, index, length);
+    };
+  }
+
+  // **Reduce** builds up a single result from a list of values, aka `inject`,
+  // or `foldl`.
+  _.reduce = _.foldl = _.inject = createReduce(1);
+
+  // The right-associative version of reduce, also known as `foldr`.
+  _.reduceRight = _.foldr = createReduce(-1);
+
+  // Return the first value which passes a truth test. Aliased as `detect`.
+  _.find = _.detect = function(obj, predicate, context) {
+    var key;
+    if (isArrayLike(obj)) {
+      key = _.findIndex(obj, predicate, context);
+    } else {
+      key = _.findKey(obj, predicate, context);
+    }
+    if (key !== void 0 && key !== -1) return obj[key];
+  };
+
+  // Return all the elements that pass a truth test.
+  // Aliased as `select`.
+  _.filter = _.select = function(obj, predicate, context) {
+    var results = [];
+    predicate = cb(predicate, context);
+    _.each(obj, function(value, index, list) {
+      if (predicate(value, index, list)) results.push(value);
+    });
+    return results;
+  };
+
+  // Return all the elements for which a truth test fails.
+  _.reject = function(obj, predicate, context) {
+    return _.filter(obj, _.negate(cb(predicate)), context);
+  };
+
+  // Determine whether all of the elements match a truth test.
+  // Aliased as `all`.
+  _.every = _.all = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+    var keys = !isArrayLike(obj) && _.keys(obj),
+        length = (keys || obj).length;
+    for (var index = 0; index < length; index++) {
+      var currentKey = keys ? keys[index] : index;
+      if (!predicate(obj[currentKey], currentKey, obj)) return false;
+    }
+    return true;
+  };
+
+  // Determine if at least one element in the object matches a truth test.
+  // Aliased as `any`.
+  _.some = _.any = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+    var keys = !isArrayLike(obj) && _.keys(obj),
+        length = (keys || obj).length;
+    for (var index = 0; index < length; index++) {
+      var currentKey = keys ? keys[index] : index;
+      if (predicate(obj[currentKey], currentKey, obj)) return true;
+    }
+    return false;
+  };
+
+  // Determine if the array or object contains a given item (using `===`).
+  // Aliased as `includes` and `include`.
+  _.contains = _.includes = _.include = function(obj, item, fromIndex, guard) {
+    if (!isArrayLike(obj)) obj = _.values(obj);
+    if (typeof fromIndex != 'number' || guard) fromIndex = 0;
+    return _.indexOf(obj, item, fromIndex) >= 0;
+  };
+
+  // Invoke a method (with arguments) on every item in a collection.
+  _.invoke = function(obj, method) {
+    var args = slice.call(arguments, 2);
+    var isFunc = _.isFunction(method);
+    return _.map(obj, function(value) {
+      var func = isFunc ? method : value[method];
+      return func == null ? func : func.apply(value, args);
+    });
+  };
+
+  // Convenience version of a common use case of `map`: fetching a property.
+  _.pluck = function(obj, key) {
+    return _.map(obj, _.property(key));
+  };
+
+  // Convenience version of a common use case of `filter`: selecting only objects
+  // containing specific `key:value` pairs.
+  _.where = function(obj, attrs) {
+    return _.filter(obj, _.matcher(attrs));
+  };
+
+  // Convenience version of a common use case of `find`: getting the first object
+  // containing specific `key:value` pairs.
+  _.findWhere = function(obj, attrs) {
+    return _.find(obj, _.matcher(attrs));
+  };
+
+  // Return the maximum element (or element-based computation).
+  _.max = function(obj, iteratee, context) {
+    var result = -Infinity, lastComputed = -Infinity,
+        value, computed;
+    if (iteratee == null && obj != null) {
+      obj = isArrayLike(obj) ? obj : _.values(obj);
+      for (var i = 0, length = obj.length; i < length; i++) {
+        value = obj[i];
+        if (value > result) {
+          result = value;
+        }
+      }
+    } else {
+      iteratee = cb(iteratee, context);
+      _.each(obj, function(value, index, list) {
+        computed = iteratee(value, index, list);
+        if (computed > lastComputed || computed === -Infinity && result === -Infinity) {
+          result = value;
+          lastComputed = computed;
+        }
+      });
+    }
+    return result;
+  };
+
+  // Return the minimum element (or element-based computation).
+  _.min = function(obj, iteratee, context) {
+    var result = Infinity, lastComputed = Infinity,
+        value, computed;
+    if (iteratee == null && obj != null) {
+      obj = isArrayLike(obj) ? obj : _.values(obj);
+      for (var i = 0, length = obj.length; i < length; i++) {
+        value = obj[i];
+        if (value < result) {
+          result = value;
+        }
+      }
+    } else {
+      iteratee = cb(iteratee, context);
+      _.each(obj, function(value, index, list) {
+        computed = iteratee(value, index, list);
+        if (computed < lastComputed || computed === Infinity && result === Infinity) {
+          result = value;
+          lastComputed = computed;
+        }
+      });
+    }
+    return result;
+  };
+
+  // Shuffle a collection, using the modern version of the
+  // [Fisher-Yates shuffle](http://en.wikipedia.org/wiki/Fisher–Yates_shuffle).
+  _.shuffle = function(obj) {
+    var set = isArrayLike(obj) ? obj : _.values(obj);
+    var length = set.length;
+    var shuffled = Array(length);
+    for (var index = 0, rand; index < length; index++) {
+      rand = _.random(0, index);
+      if (rand !== index) shuffled[index] = shuffled[rand];
+      shuffled[rand] = set[index];
+    }
+    return shuffled;
+  };
+
+  // Sample **n** random values from a collection.
+  // If **n** is not specified, returns a single random element.
+  // The internal `guard` argument allows it to work with `map`.
+  _.sample = function(obj, n, guard) {
+    if (n == null || guard) {
+      if (!isArrayLike(obj)) obj = _.values(obj);
+      return obj[_.random(obj.length - 1)];
+    }
+    return _.shuffle(obj).slice(0, Math.max(0, n));
+  };
+
+  // Sort the object's values by a criterion produced by an iteratee.
+  _.sortBy = function(obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+    return _.pluck(_.map(obj, function(value, index, list) {
+      return {
+        value: value,
+        index: index,
+        criteria: iteratee(value, index, list)
+      };
+    }).sort(function(left, right) {
+      var a = left.criteria;
+      var b = right.criteria;
+      if (a !== b) {
+        if (a > b || a === void 0) return 1;
+        if (a < b || b === void 0) return -1;
+      }
+      return left.index - right.index;
+    }), 'value');
+  };
+
+  // An internal function used for aggregate "group by" operations.
+  var group = function(behavior) {
+    return function(obj, iteratee, context) {
+      var result = {};
+      iteratee = cb(iteratee, context);
+      _.each(obj, function(value, index) {
+        var key = iteratee(value, index, obj);
+        behavior(result, value, key);
+      });
+      return result;
+    };
+  };
+
+  // Groups the object's values by a criterion. Pass either a string attribute
+  // to group by, or a function that returns the criterion.
+  _.groupBy = group(function(result, value, key) {
+    if (_.has(result, key)) result[key].push(value); else result[key] = [value];
+  });
+
+  // Indexes the object's values by a criterion, similar to `groupBy`, but for
+  // when you know that your index values will be unique.
+  _.indexBy = group(function(result, value, key) {
+    result[key] = value;
+  });
+
+  // Counts instances of an object that group by a certain criterion. Pass
+  // either a string attribute to count by, or a function that returns the
+  // criterion.
+  _.countBy = group(function(result, value, key) {
+    if (_.has(result, key)) result[key]++; else result[key] = 1;
+  });
+
+  // Safely create a real, live array from anything iterable.
+  _.toArray = function(obj) {
+    if (!obj) return [];
+    if (_.isArray(obj)) return slice.call(obj);
+    if (isArrayLike(obj)) return _.map(obj, _.identity);
+    return _.values(obj);
+  };
+
+  // Return the number of elements in an object.
+  _.size = function(obj) {
+    if (obj == null) return 0;
+    return isArrayLike(obj) ? obj.length : _.keys(obj).length;
+  };
+
+  // Split a collection into two arrays: one whose elements all satisfy the given
+  // predicate, and one whose elements all do not satisfy the predicate.
+  _.partition = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+    var pass = [], fail = [];
+    _.each(obj, function(value, key, obj) {
+      (predicate(value, key, obj) ? pass : fail).push(value);
+    });
+    return [pass, fail];
+  };
+
+  // Array Functions
+  // ---------------
+
+  // Get the first element of an array. Passing **n** will return the first N
+  // values in the array. Aliased as `head` and `take`. The **guard** check
+  // allows it to work with `_.map`.
+  _.first = _.head = _.take = function(array, n, guard) {
+    if (array == null) return void 0;
+    if (n == null || guard) return array[0];
+    return _.initial(array, array.length - n);
+  };
+
+  // Returns everything but the last entry of the array. Especially useful on
+  // the arguments object. Passing **n** will return all the values in
+  // the array, excluding the last N.
+  _.initial = function(array, n, guard) {
+    return slice.call(array, 0, Math.max(0, array.length - (n == null || guard ? 1 : n)));
+  };
+
+  // Get the last element of an array. Passing **n** will return the last N
+  // values in the array.
+  _.last = function(array, n, guard) {
+    if (array == null) return void 0;
+    if (n == null || guard) return array[array.length - 1];
+    return _.rest(array, Math.max(0, array.length - n));
+  };
+
+  // Returns everything but the first entry of the array. Aliased as `tail` and `drop`.
+  // Especially useful on the arguments object. Passing an **n** will return
+  // the rest N values in the array.
+  _.rest = _.tail = _.drop = function(array, n, guard) {
+    return slice.call(array, n == null || guard ? 1 : n);
+  };
+
+  // Trim out all falsy values from an array.
+  _.compact = function(array) {
+    return _.filter(array, _.identity);
+  };
+
+  // Internal implementation of a recursive `flatten` function.
+  var flatten = function(input, shallow, strict, startIndex) {
+    var output = [], idx = 0;
+    for (var i = startIndex || 0, length = getLength(input); i < length; i++) {
+      var value = input[i];
+      if (isArrayLike(value) && (_.isArray(value) || _.isArguments(value))) {
+        //flatten current level of array or arguments object
+        if (!shallow) value = flatten(value, shallow, strict);
+        var j = 0, len = value.length;
+        output.length += len;
+        while (j < len) {
+          output[idx++] = value[j++];
+        }
+      } else if (!strict) {
+        output[idx++] = value;
+      }
+    }
+    return output;
+  };
+
+  // Flatten out an array, either recursively (by default), or just one level.
+  _.flatten = function(array, shallow) {
+    return flatten(array, shallow, false);
+  };
+
+  // Return a version of the array that does not contain the specified value(s).
+  _.without = function(array) {
+    return _.difference(array, slice.call(arguments, 1));
+  };
+
+  // Produce a duplicate-free version of the array. If the array has already
+  // been sorted, you have the option of using a faster algorithm.
+  // Aliased as `unique`.
+  _.uniq = _.unique = function(array, isSorted, iteratee, context) {
+    if (!_.isBoolean(isSorted)) {
+      context = iteratee;
+      iteratee = isSorted;
+      isSorted = false;
+    }
+    if (iteratee != null) iteratee = cb(iteratee, context);
+    var result = [];
+    var seen = [];
+    for (var i = 0, length = getLength(array); i < length; i++) {
+      var value = array[i],
+          computed = iteratee ? iteratee(value, i, array) : value;
+      if (isSorted) {
+        if (!i || seen !== computed) result.push(value);
+        seen = computed;
+      } else if (iteratee) {
+        if (!_.contains(seen, computed)) {
+          seen.push(computed);
+          result.push(value);
+        }
+      } else if (!_.contains(result, value)) {
+        result.push(value);
+      }
+    }
+    return result;
+  };
+
+  // Produce an array that contains the union: each distinct element from all of
+  // the passed-in arrays.
+  _.union = function() {
+    return _.uniq(flatten(arguments, true, true));
+  };
+
+  // Produce an array that contains every item shared between all the
+  // passed-in arrays.
+  _.intersection = function(array) {
+    var result = [];
+    var argsLength = arguments.length;
+    for (var i = 0, length = getLength(array); i < length; i++) {
+      var item = array[i];
+      if (_.contains(result, item)) continue;
+      for (var j = 1; j < argsLength; j++) {
+        if (!_.contains(arguments[j], item)) break;
+      }
+      if (j === argsLength) result.push(item);
+    }
+    return result;
+  };
+
+  // Take the difference between one array and a number of other arrays.
+  // Only the elements present in just the first array will remain.
+  _.difference = function(array) {
+    var rest = flatten(arguments, true, true, 1);
+    return _.filter(array, function(value){
+      return !_.contains(rest, value);
+    });
+  };
+
+  // Zip together multiple lists into a single array -- elements that share
+  // an index go together.
+  _.zip = function() {
+    return _.unzip(arguments);
+  };
+
+  // Complement of _.zip. Unzip accepts an array of arrays and groups
+  // each array's elements on shared indices
+  _.unzip = function(array) {
+    var length = array && _.max(array, getLength).length || 0;
+    var result = Array(length);
+
+    for (var index = 0; index < length; index++) {
+      result[index] = _.pluck(array, index);
+    }
+    return result;
+  };
+
+  // Converts lists into objects. Pass either a single array of `[key, value]`
+  // pairs, or two parallel arrays of the same length -- one of keys, and one of
+  // the corresponding values.
+  _.object = function(list, values) {
+    var result = {};
+    for (var i = 0, length = getLength(list); i < length; i++) {
+      if (values) {
+        result[list[i]] = values[i];
+      } else {
+        result[list[i][0]] = list[i][1];
+      }
+    }
+    return result;
+  };
+
+  // Generator function to create the findIndex and findLastIndex functions
+  function createPredicateIndexFinder(dir) {
+    return function(array, predicate, context) {
+      predicate = cb(predicate, context);
+      var length = getLength(array);
+      var index = dir > 0 ? 0 : length - 1;
+      for (; index >= 0 && index < length; index += dir) {
+        if (predicate(array[index], index, array)) return index;
+      }
+      return -1;
+    };
+  }
+
+  // Returns the first index on an array-like that passes a predicate test
+  _.findIndex = createPredicateIndexFinder(1);
+  _.findLastIndex = createPredicateIndexFinder(-1);
+
+  // Use a comparator function to figure out the smallest index at which
+  // an object should be inserted so as to maintain order. Uses binary search.
+  _.sortedIndex = function(array, obj, iteratee, context) {
+    iteratee = cb(iteratee, context, 1);
+    var value = iteratee(obj);
+    var low = 0, high = getLength(array);
+    while (low < high) {
+      var mid = Math.floor((low + high) / 2);
+      if (iteratee(array[mid]) < value) low = mid + 1; else high = mid;
+    }
+    return low;
+  };
+
+  // Generator function to create the indexOf and lastIndexOf functions
+  function createIndexFinder(dir, predicateFind, sortedIndex) {
+    return function(array, item, idx) {
+      var i = 0, length = getLength(array);
+      if (typeof idx == 'number') {
+        if (dir > 0) {
+            i = idx >= 0 ? idx : Math.max(idx + length, i);
+        } else {
+            length = idx >= 0 ? Math.min(idx + 1, length) : idx + length + 1;
+        }
+      } else if (sortedIndex && idx && length) {
+        idx = sortedIndex(array, item);
+        return array[idx] === item ? idx : -1;
+      }
+      if (item !== item) {
+        idx = predicateFind(slice.call(array, i, length), _.isNaN);
+        return idx >= 0 ? idx + i : -1;
+      }
+      for (idx = dir > 0 ? i : length - 1; idx >= 0 && idx < length; idx += dir) {
+        if (array[idx] === item) return idx;
+      }
+      return -1;
+    };
+  }
+
+  // Return the position of the first occurrence of an item in an array,
+  // or -1 if the item is not included in the array.
+  // If the array is large and already in sort order, pass `true`
+  // for **isSorted** to use binary search.
+  _.indexOf = createIndexFinder(1, _.findIndex, _.sortedIndex);
+  _.lastIndexOf = createIndexFinder(-1, _.findLastIndex);
+
+  // Generate an integer Array containing an arithmetic progression. A port of
+  // the native Python `range()` function. See
+  // [the Python documentation](http://docs.python.org/library/functions.html#range).
+  _.range = function(start, stop, step) {
+    if (stop == null) {
+      stop = start || 0;
+      start = 0;
+    }
+    step = step || 1;
+
+    var length = Math.max(Math.ceil((stop - start) / step), 0);
+    var range = Array(length);
+
+    for (var idx = 0; idx < length; idx++, start += step) {
+      range[idx] = start;
+    }
+
+    return range;
+  };
+
+  // Function (ahem) Functions
+  // ------------------
+
+  // Determines whether to execute a function as a constructor
+  // or a normal function with the provided arguments
+  var executeBound = function(sourceFunc, boundFunc, context, callingContext, args) {
+    if (!(callingContext instanceof boundFunc)) return sourceFunc.apply(context, args);
+    var self = baseCreate(sourceFunc.prototype);
+    var result = sourceFunc.apply(self, args);
+    if (_.isObject(result)) return result;
+    return self;
+  };
+
+  // Create a function bound to a given object (assigning `this`, and arguments,
+  // optionally). Delegates to **ECMAScript 5**'s native `Function.bind` if
+  // available.
+  _.bind = function(func, context) {
+    if (nativeBind && func.bind === nativeBind) return nativeBind.apply(func, slice.call(arguments, 1));
+    if (!_.isFunction(func)) throw new TypeError('Bind must be called on a function');
+    var args = slice.call(arguments, 2);
+    var bound = function() {
+      return executeBound(func, bound, context, this, args.concat(slice.call(arguments)));
+    };
+    return bound;
+  };
+
+  // Partially apply a function by creating a version that has had some of its
+  // arguments pre-filled, without changing its dynamic `this` context. _ acts
+  // as a placeholder, allowing any combination of arguments to be pre-filled.
+  _.partial = function(func) {
+    var boundArgs = slice.call(arguments, 1);
+    var bound = function() {
+      var position = 0, length = boundArgs.length;
+      var args = Array(length);
+      for (var i = 0; i < length; i++) {
+        args[i] = boundArgs[i] === _ ? arguments[position++] : boundArgs[i];
+      }
+      while (position < arguments.length) args.push(arguments[position++]);
+      return executeBound(func, bound, this, this, args);
+    };
+    return bound;
+  };
+
+  // Bind a number of an object's methods to that object. Remaining arguments
+  // are the method names to be bound. Useful for ensuring that all callbacks
+  // defined on an object belong to it.
+  _.bindAll = function(obj) {
+    var i, length = arguments.length, key;
+    if (length <= 1) throw new Error('bindAll must be passed function names');
+    for (i = 1; i < length; i++) {
+      key = arguments[i];
+      obj[key] = _.bind(obj[key], obj);
+    }
+    return obj;
+  };
+
+  // Memoize an expensive function by storing its results.
+  _.memoize = function(func, hasher) {
+    var memoize = function(key) {
+      var cache = memoize.cache;
+      var address = '' + (hasher ? hasher.apply(this, arguments) : key);
+      if (!_.has(cache, address)) cache[address] = func.apply(this, arguments);
+      return cache[address];
+    };
+    memoize.cache = {};
+    return memoize;
+  };
+
+  // Delays a function for the given number of milliseconds, and then calls
+  // it with the arguments supplied.
+  _.delay = function(func, wait) {
+    var args = slice.call(arguments, 2);
+    return setTimeout(function(){
+      return func.apply(null, args);
+    }, wait);
+  };
+
+  // Defers a function, scheduling it to run after the current call stack has
+  // cleared.
+  _.defer = _.partial(_.delay, _, 1);
+
+  // Returns a function, that, when invoked, will only be triggered at most once
+  // during a given window of time. Normally, the throttled function will run
+  // as much as it can, without ever going more than once per `wait` duration;
+  // but if you'd like to disable the execution on the leading edge, pass
+  // `{leading: false}`. To disable execution on the trailing edge, ditto.
+  _.throttle = function(func, wait, options) {
+    var context, args, result;
+    var timeout = null;
+    var previous = 0;
+    if (!options) options = {};
+    var later = function() {
+      previous = options.leading === false ? 0 : _.now();
+      timeout = null;
+      result = func.apply(context, args);
+      if (!timeout) context = args = null;
+    };
+    return function() {
+      var now = _.now();
+      if (!previous && options.leading === false) previous = now;
+      var remaining = wait - (now - previous);
+      context = this;
+      args = arguments;
+      if (remaining <= 0 || remaining > wait) {
+        if (timeout) {
+          clearTimeout(timeout);
+          timeout = null;
+        }
+        previous = now;
+        result = func.apply(context, args);
+        if (!timeout) context = args = null;
+      } else if (!timeout && options.trailing !== false) {
+        timeout = setTimeout(later, remaining);
+      }
+      return result;
+    };
+  };
+
+  // Returns a function, that, as long as it continues to be invoked, will not
+  // be triggered. The function will be called after it stops being called for
+  // N milliseconds. If `immediate` is passed, trigger the function on the
+  // leading edge, instead of the trailing.
+  _.debounce = function(func, wait, immediate) {
+    var timeout, args, context, timestamp, result;
+
+    var later = function() {
+      var last = _.now() - timestamp;
+
+      if (last < wait && last >= 0) {
+        timeout = setTimeout(later, wait - last);
+      } else {
+        timeout = null;
+        if (!immediate) {
+          result = func.apply(context, args);
+          if (!timeout) context = args = null;
+        }
+      }
+    };
+
+    return function() {
+      context = this;
+      args = arguments;
+      timestamp = _.now();
+      var callNow = immediate && !timeout;
+      if (!timeout) timeout = setTimeout(later, wait);
+      if (callNow) {
+        result = func.apply(context, args);
+        context = args = null;
+      }
+
+      return result;
+    };
+  };
+
+  // Returns the first function passed as an argument to the second,
+  // allowing you to adjust arguments, run code before and after, and
+  // conditionally execute the original function.
+  _.wrap = function(func, wrapper) {
+    return _.partial(wrapper, func);
+  };
+
+  // Returns a negated version of the passed-in predicate.
+  _.negate = function(predicate) {
+    return function() {
+      return !predicate.apply(this, arguments);
+    };
+  };
+
+  // Returns a function that is the composition of a list of functions, each
+  // consuming the return value of the function that follows.
+  _.compose = function() {
+    var args = arguments;
+    var start = args.length - 1;
+    return function() {
+      var i = start;
+      var result = args[start].apply(this, arguments);
+      while (i--) result = args[i].call(this, result);
+      return result;
+    };
+  };
+
+  // Returns a function that will only be executed on and after the Nth call.
+  _.after = function(times, func) {
+    return function() {
+      if (--times < 1) {
+        return func.apply(this, arguments);
+      }
+    };
+  };
+
+  // Returns a function that will only be executed up to (but not including) the Nth call.
+  _.before = function(times, func) {
+    var memo;
+    return function() {
+      if (--times > 0) {
+        memo = func.apply(this, arguments);
+      }
+      if (times <= 1) func = null;
+      return memo;
+    };
+  };
+
+  // Returns a function that will be executed at most one time, no matter how
+  // often you call it. Useful for lazy initialization.
+  _.once = _.partial(_.before, 2);
+
+  // Object Functions
+  // ----------------
+
+  // Keys in IE < 9 that won't be iterated by `for key in ...` and thus missed.
+  var hasEnumBug = !{toString: null}.propertyIsEnumerable('toString');
+  var nonEnumerableProps = ['valueOf', 'isPrototypeOf', 'toString',
+                      'propertyIsEnumerable', 'hasOwnProperty', 'toLocaleString'];
+
+  function collectNonEnumProps(obj, keys) {
+    var nonEnumIdx = nonEnumerableProps.length;
+    var constructor = obj.constructor;
+    var proto = (_.isFunction(constructor) && constructor.prototype) || ObjProto;
+
+    // Constructor is a special case.
+    var prop = 'constructor';
+    if (_.has(obj, prop) && !_.contains(keys, prop)) keys.push(prop);
+
+    while (nonEnumIdx--) {
+      prop = nonEnumerableProps[nonEnumIdx];
+      if (prop in obj && obj[prop] !== proto[prop] && !_.contains(keys, prop)) {
+        keys.push(prop);
+      }
+    }
+  }
+
+  // Retrieve the names of an object's own properties.
+  // Delegates to **ECMAScript 5**'s native `Object.keys`
+  _.keys = function(obj) {
+    if (!_.isObject(obj)) return [];
+    if (nativeKeys) return nativeKeys(obj);
+    var keys = [];
+    for (var key in obj) if (_.has(obj, key)) keys.push(key);
+    // Ahem, IE < 9.
+    if (hasEnumBug) collectNonEnumProps(obj, keys);
+    return keys;
+  };
+
+  // Retrieve all the property names of an object.
+  _.allKeys = function(obj) {
+    if (!_.isObject(obj)) return [];
+    var keys = [];
+    for (var key in obj) keys.push(key);
+    // Ahem, IE < 9.
+    if (hasEnumBug) collectNonEnumProps(obj, keys);
+    return keys;
+  };
+
+  // Retrieve the values of an object's properties.
+  _.values = function(obj) {
+    var keys = _.keys(obj);
+    var length = keys.length;
+    var values = Array(length);
+    for (var i = 0; i < length; i++) {
+      values[i] = obj[keys[i]];
+    }
+    return values;
+  };
+
+  // Returns the results of applying the iteratee to each element of the object
+  // In contrast to _.map it returns an object
+  _.mapObject = function(obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+    var keys =  _.keys(obj),
+          length = keys.length,
+          results = {},
+          currentKey;
+      for (var index = 0; index < length; index++) {
+        currentKey = keys[index];
+        results[currentKey] = iteratee(obj[currentKey], currentKey, obj);
+      }
+      return results;
+  };
+
+  // Convert an object into a list of `[key, value]` pairs.
+  _.pairs = function(obj) {
+    var keys = _.keys(obj);
+    var length = keys.length;
+    var pairs = Array(length);
+    for (var i = 0; i < length; i++) {
+      pairs[i] = [keys[i], obj[keys[i]]];
+    }
+    return pairs;
+  };
+
+  // Invert the keys and values of an object. The values must be serializable.
+  _.invert = function(obj) {
+    var result = {};
+    var keys = _.keys(obj);
+    for (var i = 0, length = keys.length; i < length; i++) {
+      result[obj[keys[i]]] = keys[i];
+    }
+    return result;
+  };
+
+  // Return a sorted list of the function names available on the object.
+  // Aliased as `methods`
+  _.functions = _.methods = function(obj) {
+    var names = [];
+    for (var key in obj) {
+      if (_.isFunction(obj[key])) names.push(key);
+    }
+    return names.sort();
+  };
+
+  // Extend a given object with all the properties in passed-in object(s).
+  _.extend = createAssigner(_.allKeys);
+
+  // Assigns a given object with all the own properties in the passed-in object(s)
+  // (https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/assign)
+  _.extendOwn = _.assign = createAssigner(_.keys);
+
+  // Returns the first key on an object that passes a predicate test
+  _.findKey = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+    var keys = _.keys(obj), key;
+    for (var i = 0, length = keys.length; i < length; i++) {
+      key = keys[i];
+      if (predicate(obj[key], key, obj)) return key;
+    }
+  };
+
+  // Return a copy of the object only containing the whitelisted properties.
+  _.pick = function(object, oiteratee, context) {
+    var result = {}, obj = object, iteratee, keys;
+    if (obj == null) return result;
+    if (_.isFunction(oiteratee)) {
+      keys = _.allKeys(obj);
+      iteratee = optimizeCb(oiteratee, context);
+    } else {
+      keys = flatten(arguments, false, false, 1);
+      iteratee = function(value, key, obj) { return key in obj; };
+      obj = Object(obj);
+    }
+    for (var i = 0, length = keys.length; i < length; i++) {
+      var key = keys[i];
+      var value = obj[key];
+      if (iteratee(value, key, obj)) result[key] = value;
+    }
+    return result;
+  };
+
+   // Return a copy of the object without the blacklisted properties.
+  _.omit = function(obj, iteratee, context) {
+    if (_.isFunction(iteratee)) {
+      iteratee = _.negate(iteratee);
+    } else {
+      var keys = _.map(flatten(arguments, false, false, 1), String);
+      iteratee = function(value, key) {
+        return !_.contains(keys, key);
+      };
+    }
+    return _.pick(obj, iteratee, context);
+  };
+
+  // Fill in a given object with default properties.
+  _.defaults = createAssigner(_.allKeys, true);
+
+  // Creates an object that inherits from the given prototype object.
+  // If additional properties are provided then they will be added to the
+  // created object.
+  _.create = function(prototype, props) {
+    var result = baseCreate(prototype);
+    if (props) _.extendOwn(result, props);
+    return result;
+  };
+
+  // Create a (shallow-cloned) duplicate of an object.
+  _.clone = function(obj) {
+    if (!_.isObject(obj)) return obj;
+    return _.isArray(obj) ? obj.slice() : _.extend({}, obj);
+  };
+
+  // Invokes interceptor with the obj, and then returns obj.
+  // The primary purpose of this method is to "tap into" a method chain, in
+  // order to perform operations on intermediate results within the chain.
+  _.tap = function(obj, interceptor) {
+    interceptor(obj);
+    return obj;
+  };
+
+  // Returns whether an object has a given set of `key:value` pairs.
+  _.isMatch = function(object, attrs) {
+    var keys = _.keys(attrs), length = keys.length;
+    if (object == null) return !length;
+    var obj = Object(object);
+    for (var i = 0; i < length; i++) {
+      var key = keys[i];
+      if (attrs[key] !== obj[key] || !(key in obj)) return false;
+    }
+    return true;
+  };
+
+
+  // Internal recursive comparison function for `isEqual`.
+  var eq = function(a, b, aStack, bStack) {
+    // Identical objects are equal. `0 === -0`, but they aren't identical.
+    // See the [Harmony `egal` proposal](http://wiki.ecmascript.org/doku.php?id=harmony:egal).
+    if (a === b) return a !== 0 || 1 / a === 1 / b;
+    // A strict comparison is necessary because `null == undefined`.
+    if (a == null || b == null) return a === b;
+    // Unwrap any wrapped objects.
+    if (a instanceof _) a = a._wrapped;
+    if (b instanceof _) b = b._wrapped;
+    // Compare `[[Class]]` names.
+    var className = toString.call(a);
+    if (className !== toString.call(b)) return false;
+    switch (className) {
+      // Strings, numbers, regular expressions, dates, and booleans are compared by value.
+      case '[object RegExp]':
+      // RegExps are coerced to strings for comparison (Note: '' + /a/i === '/a/i')
+      case '[object String]':
+        // Primitives and their corresponding object wrappers are equivalent; thus, `"5"` is
+        // equivalent to `new String("5")`.
+        return '' + a === '' + b;
+      case '[object Number]':
+        // `NaN`s are equivalent, but non-reflexive.
+        // Object(NaN) is equivalent to NaN
+        if (+a !== +a) return +b !== +b;
+        // An `egal` comparison is performed for other numeric values.
+        return +a === 0 ? 1 / +a === 1 / b : +a === +b;
+      case '[object Date]':
+      case '[object Boolean]':
+        // Coerce dates and booleans to numeric primitive values. Dates are compared by their
+        // millisecond representations. Note that invalid dates with millisecond representations
+        // of `NaN` are not equivalent.
+        return +a === +b;
+    }
+
+    var areArrays = className === '[object Array]';
+    if (!areArrays) {
+      if (typeof a != 'object' || typeof b != 'object') return false;
+
+      // Objects with different constructors are not equivalent, but `Object`s or `Array`s
+      // from different frames are.
+      var aCtor = a.constructor, bCtor = b.constructor;
+      if (aCtor !== bCtor && !(_.isFunction(aCtor) && aCtor instanceof aCtor &&
+                               _.isFunction(bCtor) && bCtor instanceof bCtor)
+                          && ('constructor' in a && 'constructor' in b)) {
+        return false;
+      }
+    }
+    // Assume equality for cyclic structures. The algorithm for detecting cyclic
+    // structures is adapted from ES 5.1 section 15.12.3, abstract operation `JO`.
+
+    // Initializing stack of traversed objects.
+    // It's done here since we only need them for objects and arrays comparison.
+    aStack = aStack || [];
+    bStack = bStack || [];
+    var length = aStack.length;
+    while (length--) {
+      // Linear search. Performance is inversely proportional to the number of
+      // unique nested structures.
+      if (aStack[length] === a) return bStack[length] === b;
+    }
+
+    // Add the first object to the stack of traversed objects.
+    aStack.push(a);
+    bStack.push(b);
+
+    // Recursively compare objects and arrays.
+    if (areArrays) {
+      // Compare array lengths to determine if a deep comparison is necessary.
+      length = a.length;
+      if (length !== b.length) return false;
+      // Deep compare the contents, ignoring non-numeric properties.
+      while (length--) {
+        if (!eq(a[length], b[length], aStack, bStack)) return false;
+      }
+    } else {
+      // Deep compare objects.
+      var keys = _.keys(a), key;
+      length = keys.length;
+      // Ensure that both objects contain the same number of properties before comparing deep equality.
+      if (_.keys(b).length !== length) return false;
+      while (length--) {
+        // Deep compare each member
+        key = keys[length];
+        if (!(_.has(b, key) && eq(a[key], b[key], aStack, bStack))) return false;
+      }
+    }
+    // Remove the first object from the stack of traversed objects.
+    aStack.pop();
+    bStack.pop();
+    return true;
+  };
+
+  // Perform a deep comparison to check if two objects are equal.
+  _.isEqual = function(a, b) {
+    return eq(a, b);
+  };
+
+  // Is a given array, string, or object empty?
+  // An "empty" object has no enumerable own-properties.
+  _.isEmpty = function(obj) {
+    if (obj == null) return true;
+    if (isArrayLike(obj) && (_.isArray(obj) || _.isString(obj) || _.isArguments(obj))) return obj.length === 0;
+    return _.keys(obj).length === 0;
+  };
+
+  // Is a given value a DOM element?
+  _.isElement = function(obj) {
+    return !!(obj && obj.nodeType === 1);
+  };
+
+  // Is a given value an array?
+  // Delegates to ECMA5's native Array.isArray
+  _.isArray = nativeIsArray || function(obj) {
+    return toString.call(obj) === '[object Array]';
+  };
+
+  // Is a given variable an object?
+  _.isObject = function(obj) {
+    var type = typeof obj;
+    return type === 'function' || type === 'object' && !!obj;
+  };
+
+  // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp, isError.
+  _.each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'Error'], function(name) {
+    _['is' + name] = function(obj) {
+      return toString.call(obj) === '[object ' + name + ']';
+    };
+  });
+
+  // Define a fallback version of the method in browsers (ahem, IE < 9), where
+  // there isn't any inspectable "Arguments" type.
+  if (!_.isArguments(arguments)) {
+    _.isArguments = function(obj) {
+      return _.has(obj, 'callee');
+    };
+  }
+
+  // Optimize `isFunction` if appropriate. Work around some typeof bugs in old v8,
+  // IE 11 (#1621), and in Safari 8 (#1929).
+  if (typeof /./ != 'function' && typeof Int8Array != 'object') {
+    _.isFunction = function(obj) {
+      return typeof obj == 'function' || false;
+    };
+  }
+
+  // Is a given object a finite number?
+  _.isFinite = function(obj) {
+    return isFinite(obj) && !isNaN(parseFloat(obj));
+  };
+
+  // Is the given value `NaN`? (NaN is the only number which does not equal itself).
+  _.isNaN = function(obj) {
+    return _.isNumber(obj) && obj !== +obj;
+  };
+
+  // Is a given value a boolean?
+  _.isBoolean = function(obj) {
+    return obj === true || obj === false || toString.call(obj) === '[object Boolean]';
+  };
+
+  // Is a given value equal to null?
+  _.isNull = function(obj) {
+    return obj === null;
+  };
+
+  // Is a given variable undefined?
+  _.isUndefined = function(obj) {
+    return obj === void 0;
+  };
+
+  // Shortcut function for checking if an object has a given property directly
+  // on itself (in other words, not on a prototype).
+  _.has = function(obj, key) {
+    return obj != null && hasOwnProperty.call(obj, key);
+  };
+
+  // Utility Functions
+  // -----------------
+
+  // Run Underscore.js in *noConflict* mode, returning the `_` variable to its
+  // previous owner. Returns a reference to the Underscore object.
+  _.noConflict = function() {
+    root._ = previousUnderscore;
+    return this;
+  };
+
+  // Keep the identity function around for default iteratees.
+  _.identity = function(value) {
+    return value;
+  };
+
+  // Predicate-generating functions. Often useful outside of Underscore.
+  _.constant = function(value) {
+    return function() {
+      return value;
+    };
+  };
+
+  _.noop = function(){};
+
+  _.property = property;
+
+  // Generates a function for a given object that returns a given property.
+  _.propertyOf = function(obj) {
+    return obj == null ? function(){} : function(key) {
+      return obj[key];
+    };
+  };
+
+  // Returns a predicate for checking whether an object has a given set of
+  // `key:value` pairs.
+  _.matcher = _.matches = function(attrs) {
+    attrs = _.extendOwn({}, attrs);
+    return function(obj) {
+      return _.isMatch(obj, attrs);
+    };
+  };
+
+  // Run a function **n** times.
+  _.times = function(n, iteratee, context) {
+    var accum = Array(Math.max(0, n));
+    iteratee = optimizeCb(iteratee, context, 1);
+    for (var i = 0; i < n; i++) accum[i] = iteratee(i);
+    return accum;
+  };
+
+  // Return a random integer between min and max (inclusive).
+  _.random = function(min, max) {
+    if (max == null) {
+      max = min;
+      min = 0;
+    }
+    return min + Math.floor(Math.random() * (max - min + 1));
+  };
+
+  // A (possibly faster) way to get the current timestamp as an integer.
+  _.now = Date.now || function() {
+    return new Date().getTime();
+  };
+
+   // List of HTML entities for escaping.
+  var escapeMap = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '`': '&#x60;'
+  };
+  var unescapeMap = _.invert(escapeMap);
+
+  // Functions for escaping and unescaping strings to/from HTML interpolation.
+  var createEscaper = function(map) {
+    var escaper = function(match) {
+      return map[match];
+    };
+    // Regexes for identifying a key that needs to be escaped
+    var source = '(?:' + _.keys(map).join('|') + ')';
+    var testRegexp = RegExp(source);
+    var replaceRegexp = RegExp(source, 'g');
+    return function(string) {
+      string = string == null ? '' : '' + string;
+      return testRegexp.test(string) ? string.replace(replaceRegexp, escaper) : string;
+    };
+  };
+  _.escape = createEscaper(escapeMap);
+  _.unescape = createEscaper(unescapeMap);
+
+  // If the value of the named `property` is a function then invoke it with the
+  // `object` as context; otherwise, return it.
+  _.result = function(object, property, fallback) {
+    var value = object == null ? void 0 : object[property];
+    if (value === void 0) {
+      value = fallback;
+    }
+    return _.isFunction(value) ? value.call(object) : value;
+  };
+
+  // Generate a unique integer id (unique within the entire client session).
+  // Useful for temporary DOM ids.
+  var idCounter = 0;
+  _.uniqueId = function(prefix) {
+    var id = ++idCounter + '';
+    return prefix ? prefix + id : id;
+  };
+
+  // By default, Underscore uses ERB-style template delimiters, change the
+  // following template settings to use alternative delimiters.
+  _.templateSettings = {
+    evaluate    : /<%([\s\S]+?)%>/g,
+    interpolate : /<%=([\s\S]+?)%>/g,
+    escape      : /<%-([\s\S]+?)%>/g
+  };
+
+  // When customizing `templateSettings`, if you don't want to define an
+  // interpolation, evaluation or escaping regex, we need one that is
+  // guaranteed not to match.
+  var noMatch = /(.)^/;
+
+  // Certain characters need to be escaped so that they can be put into a
+  // string literal.
+  var escapes = {
+    "'":      "'",
+    '\\':     '\\',
+    '\r':     'r',
+    '\n':     'n',
+    '\u2028': 'u2028',
+    '\u2029': 'u2029'
+  };
+
+  var escaper = /\\|'|\r|\n|\u2028|\u2029/g;
+
+  var escapeChar = function(match) {
+    return '\\' + escapes[match];
+  };
+
+  // JavaScript micro-templating, similar to John Resig's implementation.
+  // Underscore templating handles arbitrary delimiters, preserves whitespace,
+  // and correctly escapes quotes within interpolated code.
+  // NB: `oldSettings` only exists for backwards compatibility.
+  _.template = function(text, settings, oldSettings) {
+    if (!settings && oldSettings) settings = oldSettings;
+    settings = _.defaults({}, settings, _.templateSettings);
+
+    // Combine delimiters into one regular expression via alternation.
+    var matcher = RegExp([
+      (settings.escape || noMatch).source,
+      (settings.interpolate || noMatch).source,
+      (settings.evaluate || noMatch).source
+    ].join('|') + '|$', 'g');
+
+    // Compile the template source, escaping string literals appropriately.
+    var index = 0;
+    var source = "__p+='";
+    text.replace(matcher, function(match, escape, interpolate, evaluate, offset) {
+      source += text.slice(index, offset).replace(escaper, escapeChar);
+      index = offset + match.length;
+
+      if (escape) {
+        source += "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'";
+      } else if (interpolate) {
+        source += "'+\n((__t=(" + interpolate + "))==null?'':__t)+\n'";
+      } else if (evaluate) {
+        source += "';\n" + evaluate + "\n__p+='";
+      }
+
+      // Adobe VMs need the match returned to produce the correct offest.
+      return match;
+    });
+    source += "';\n";
+
+    // If a variable is not specified, place data values in local scope.
+    if (!settings.variable) source = 'with(obj||{}){\n' + source + '}\n';
+
+    source = "var __t,__p='',__j=Array.prototype.join," +
+      "print=function(){__p+=__j.call(arguments,'');};\n" +
+      source + 'return __p;\n';
+
+    try {
+      var render = new Function(settings.variable || 'obj', '_', source);
+    } catch (e) {
+      e.source = source;
+      throw e;
+    }
+
+    var template = function(data) {
+      return render.call(this, data, _);
+    };
+
+    // Provide the compiled source as a convenience for precompilation.
+    var argument = settings.variable || 'obj';
+    template.source = 'function(' + argument + '){\n' + source + '}';
+
+    return template;
+  };
+
+  // Add a "chain" function. Start chaining a wrapped Underscore object.
+  _.chain = function(obj) {
+    var instance = _(obj);
+    instance._chain = true;
+    return instance;
+  };
+
+  // OOP
+  // ---------------
+  // If Underscore is called as a function, it returns a wrapped object that
+  // can be used OO-style. This wrapper holds altered versions of all the
+  // underscore functions. Wrapped objects may be chained.
+
+  // Helper function to continue chaining intermediate results.
+  var result = function(instance, obj) {
+    return instance._chain ? _(obj).chain() : obj;
+  };
+
+  // Add your own custom functions to the Underscore object.
+  _.mixin = function(obj) {
+    _.each(_.functions(obj), function(name) {
+      var func = _[name] = obj[name];
+      _.prototype[name] = function() {
+        var args = [this._wrapped];
+        push.apply(args, arguments);
+        return result(this, func.apply(_, args));
+      };
+    });
+  };
+
+  // Add all of the Underscore functions to the wrapper object.
+  _.mixin(_);
+
+  // Add all mutator Array functions to the wrapper.
+  _.each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], function(name) {
+    var method = ArrayProto[name];
+    _.prototype[name] = function() {
+      var obj = this._wrapped;
+      method.apply(obj, arguments);
+      if ((name === 'shift' || name === 'splice') && obj.length === 0) delete obj[0];
+      return result(this, obj);
+    };
+  });
+
+  // Add all accessor Array functions to the wrapper.
+  _.each(['concat', 'join', 'slice'], function(name) {
+    var method = ArrayProto[name];
+    _.prototype[name] = function() {
+      return result(this, method.apply(this._wrapped, arguments));
+    };
+  });
+
+  // Extracts the result from a wrapped and chained object.
+  _.prototype.value = function() {
+    return this._wrapped;
+  };
+
+  // Provide unwrapping proxy for some methods used in engine operations
+  // such as arithmetic and JSON stringification.
+  _.prototype.valueOf = _.prototype.toJSON = _.prototype.value;
+
+  _.prototype.toString = function() {
+    return '' + this._wrapped;
+  };
+
+  // AMD registration happens at the end for compatibility with AMD loaders
+  // that may not enforce next-turn semantics on modules. Even though general
+  // practice for AMD registration is to be anonymous, underscore registers
+  // as a named module because, like jQuery, it is a base library that is
+  // popular enough to be bundled in a third party lib, but not be part of
+  // an AMD load request. Those cases could generate an error when an
+  // anonymous define() is called outside of a loader request.
+  if (typeof define === 'function' && define.amd) {
+    define('underscore', [], function() {
+      return _;
+    });
+  }
+}.call(this));
+
+/*!
+ * jQuery.scrollTo
+ * Copyright (c) 2007-2015 Ariel Flesler - aflesler<a>gmail<d>com | http://flesler.blogspot.com
+ * Licensed under MIT
+ * http://flesler.blogspot.com/2007/10/jqueryscrollto.html
+ * @projectDescription Easy element scrolling using jQuery.
+ * @author Ariel Flesler
+ * @version 2.1.0
+ */
+;(function(define) {
+	'use strict';
+
+	define(['jquery'], function($) {
+		var $scrollTo = $.scrollTo = function(target, duration, settings) {
+			return $(window).scrollTo(target, duration, settings);
+		};
+
+		$scrollTo.defaults = {
+			axis:'xy',
+			duration: 0,
+			limit:true
+		};
+
+		function isWin(elem) {
+			return !elem.nodeName ||
+				$.inArray(elem.nodeName.toLowerCase(), ['iframe','#document','html','body']) !== -1;
+		}		
+
+		$.fn.scrollTo = function(target, duration, settings) {
+			if (typeof duration === 'object') {
+				settings = duration;
+				duration = 0;
+			}
+			if (typeof settings === 'function') {
+				settings = { onAfter:settings };
+			}
+			if (target === 'max') {
+				target = 9e9;
+			}
+
+			settings = $.extend({}, $scrollTo.defaults, settings);
+			// Speed is still recognized for backwards compatibility
+			duration = duration || settings.duration;
+			// Make sure the settings are given right
+			var queue = settings.queue && settings.axis.length > 1;
+			if (queue) {
+				// Let's keep the overall duration
+				duration /= 2;
+			}
+			settings.offset = both(settings.offset);
+			settings.over = both(settings.over);
+
+			return this.each(function() {
+				// Null target yields nothing, just like jQuery does
+				if (target === null) return;
+
+				var win = isWin(this),
+					elem = win ? this.contentWindow || window : this,
+					$elem = $(elem),
+					targ = target, 
+					attr = {},
+					toff;
+
+				switch (typeof targ) {
+					// A number will pass the regex
+					case 'number':
+					case 'string':
+						if (/^([+-]=?)?\d+(\.\d+)?(px|%)?$/.test(targ)) {
+							targ = both(targ);
+							// We are done
+							break;
+						}
+						// Relative/Absolute selector
+						targ = win ? $(targ) : $(targ, elem);
+						if (!targ.length) return;
+						/* falls through */
+					case 'object':
+						// DOMElement / jQuery
+						if (targ.is || targ.style) {
+							// Get the real position of the target
+							toff = (targ = $(targ)).offset();
+						}
+				}
+
+				var offset = $.isFunction(settings.offset) && settings.offset(elem, targ) || settings.offset;
+
+				$.each(settings.axis.split(''), function(i, axis) {
+					var Pos	= axis === 'x' ? 'Left' : 'Top',
+						pos = Pos.toLowerCase(),
+						key = 'scroll' + Pos,
+						prev = $elem[key](),
+						max = $scrollTo.max(elem, axis);
+
+					if (toff) {// jQuery / DOMElement
+						attr[key] = toff[pos] + (win ? 0 : prev - $elem.offset()[pos]);
+
+						// If it's a dom element, reduce the margin
+						if (settings.margin) {
+							attr[key] -= parseInt(targ.css('margin'+Pos), 10) || 0;
+							attr[key] -= parseInt(targ.css('border'+Pos+'Width'), 10) || 0;
+						}
+
+						attr[key] += offset[pos] || 0;
+
+						if (settings.over[pos]) {
+							// Scroll to a fraction of its width/height
+							attr[key] += targ[axis === 'x'?'width':'height']() * settings.over[pos];
+						}
+					} else {
+						var val = targ[pos];
+						// Handle percentage values
+						attr[key] = val.slice && val.slice(-1) === '%' ?
+							parseFloat(val) / 100 * max
+							: val;
+					}
+
+					// Number or 'number'
+					if (settings.limit && /^\d+$/.test(attr[key])) {
+						// Check the limits
+						attr[key] = attr[key] <= 0 ? 0 : Math.min(attr[key], max);
+					}
+
+					// Don't waste time animating, if there's no need.
+					if (!i && settings.axis.length > 1) {
+						if (prev === attr[key]) {
+							// No animation needed
+							attr = {};
+						} else if (queue) {
+							// Intermediate animation
+							animate(settings.onAfterFirst);
+							// Don't animate this axis again in the next iteration.
+							attr = {};
+						}
+					}
+				});
+
+				animate(settings.onAfter);
+
+				function animate(callback) {
+					var opts = $.extend({}, settings, {
+						// The queue setting conflicts with animate()
+						// Force it to always be true
+						queue: true,
+						duration: duration,
+						complete: callback && function() {
+							callback.call(elem, targ, settings);
+						}
+					});
+					$elem.animate(attr, opts);
+				}
+			});
+		};
+
+		// Max scrolling position, works on quirks mode
+		// It only fails (not too badly) on IE, quirks mode.
+		$scrollTo.max = function(elem, axis) {
+			var Dim = axis === 'x' ? 'Width' : 'Height',
+				scroll = 'scroll'+Dim;
+
+			if (!isWin(elem))
+				return elem[scroll] - $(elem)[Dim.toLowerCase()]();
+
+			var size = 'client' + Dim,
+				doc = elem.ownerDocument || elem.document,
+				html = doc.documentElement,
+				body = doc.body;
+
+			return Math.max(html[scroll], body[scroll]) - Math.min(html[size], body[size]);
+		};
+
+		function both(val) {
+			return $.isFunction(val) || $.isPlainObject(val) ? val : { top:val, left:val };
+		}
+
+		// Add special hooks so that window scroll properties can be animated
+		$.Tween.propHooks.scrollLeft = 
+		$.Tween.propHooks.scrollTop = {
+			get: function(t) {
+				return $(t.elem)[t.prop]();
+			},
+			set: function(t) {
+				var curr = this.get(t);
+				// If interrupt is true and user scrolled, stop animating
+				if (t.options.interrupt && t._last && t._last !== curr) {
+					return $(t.elem).stop();
+				}
+				var next = Math.round(t.now);
+				// Don't waste CPU
+				// Browsers don't render floating point scroll
+				if (curr !== next) {
+					$(t.elem)[t.prop](next);
+					t._last = this.get(t);
+				}
+			}
+		};
+
+		// AMD requirement
+		return $scrollTo;
+	});
+}(typeof define === 'function' && define.amd ? define : function(deps, factory) {
+	'use strict';
+	if (typeof module !== 'undefined' && module.exports) {
+		// Node
+		module.exports = factory(require('jquery'));
+	} else {
+		factory(jQuery);
+	}
+}));
+
+/*! select 0.6.2 */
+/*! tether 0.7.2 */
+
+
+(function(root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    define(factory);
+  } else if (typeof exports === 'object') {
+    module.exports = factory(require,exports,module);
+  } else {
+    root.Tether = factory();
+  }
+}(this, function(require,exports,module) {
+
+(function() {
+  var Evented, addClass, defer, deferred, extend, flush, getBounds, getClassName, getOffsetParent, getOrigin, getScrollBarSize, getScrollParent, hasClass, node, removeClass, setClassName, uniqueId, updateClasses, zeroPosCache,
+    __hasProp = {}.hasOwnProperty,
+    __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
+    __slice = [].slice;
+
+  if (this.Tether == null) {
+    this.Tether = {
+      modules: []
+    };
+  }
+
+  getScrollParent = function(el) {
+    var parent, position, scrollParent, style, _ref;
+    position = getComputedStyle(el).position;
+    if (position === 'fixed') {
+      return el;
+    }
+    scrollParent = void 0;
+    parent = el;
+    while (parent = parent.parentNode) {
+      try {
+        style = getComputedStyle(parent);
+      } catch (_error) {}
+      if (style == null) {
+        return parent;
+      }
+      if (/(auto|scroll)/.test(style['overflow'] + style['overflowY'] + style['overflowX'])) {
+        if (position !== 'absolute' || ((_ref = style['position']) === 'relative' || _ref === 'absolute' || _ref === 'fixed')) {
+          return parent;
+        }
+      }
+    }
+    return document.body;
+  };
+
+  uniqueId = (function() {
+    var id;
+    id = 0;
+    return function() {
+      return id++;
+    };
+  })();
+
+  zeroPosCache = {};
+
+  getOrigin = function(doc) {
+    var id, k, node, v, _ref;
+    node = doc._tetherZeroElement;
+    if (node == null) {
+      node = doc.createElement('div');
+      node.setAttribute('data-tether-id', uniqueId());
+      extend(node.style, {
+        top: 0,
+        left: 0,
+        position: 'absolute'
+      });
+      doc.body.appendChild(node);
+      doc._tetherZeroElement = node;
+    }
+    id = node.getAttribute('data-tether-id');
+    if (zeroPosCache[id] == null) {
+      zeroPosCache[id] = {};
+      _ref = node.getBoundingClientRect();
+      for (k in _ref) {
+        v = _ref[k];
+        zeroPosCache[id][k] = v;
+      }
+      defer(function() {
+        return zeroPosCache[id] = void 0;
+      });
+    }
+    return zeroPosCache[id];
+  };
+
+  node = null;
+
+  getBounds = function(el) {
+    var box, doc, docEl, k, origin, v, _ref;
+    if (el === document) {
+      doc = document;
+      el = document.documentElement;
+    } else {
+      doc = el.ownerDocument;
+    }
+    docEl = doc.documentElement;
+    box = {};
+    _ref = el.getBoundingClientRect();
+    for (k in _ref) {
+      v = _ref[k];
+      box[k] = v;
+    }
+    origin = getOrigin(doc);
+    box.top -= origin.top;
+    box.left -= origin.left;
+    if (box.width == null) {
+      box.width = document.body.scrollWidth - box.left - box.right;
+    }
+    if (box.height == null) {
+      box.height = document.body.scrollHeight - box.top - box.bottom;
+    }
+    box.top = box.top - docEl.clientTop;
+    box.left = box.left - docEl.clientLeft;
+    box.right = doc.body.clientWidth - box.width - box.left;
+    box.bottom = doc.body.clientHeight - box.height - box.top;
+    return box;
+  };
+
+  getOffsetParent = function(el) {
+    return el.offsetParent || document.documentElement;
+  };
+
+  getScrollBarSize = function() {
+    var inner, outer, width, widthContained, widthScroll;
+    inner = document.createElement('div');
+    inner.style.width = '100%';
+    inner.style.height = '200px';
+    outer = document.createElement('div');
+    extend(outer.style, {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      pointerEvents: 'none',
+      visibility: 'hidden',
+      width: '200px',
+      height: '150px',
+      overflow: 'hidden'
+    });
+    outer.appendChild(inner);
+    document.body.appendChild(outer);
+    widthContained = inner.offsetWidth;
+    outer.style.overflow = 'scroll';
+    widthScroll = inner.offsetWidth;
+    if (widthContained === widthScroll) {
+      widthScroll = outer.clientWidth;
+    }
+    document.body.removeChild(outer);
+    width = widthContained - widthScroll;
+    return {
+      width: width,
+      height: width
+    };
+  };
+
+  extend = function(out) {
+    var args, key, obj, val, _i, _len, _ref;
+    if (out == null) {
+      out = {};
+    }
+    args = [];
+    Array.prototype.push.apply(args, arguments);
+    _ref = args.slice(1);
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      obj = _ref[_i];
+      if (obj) {
+        for (key in obj) {
+          if (!__hasProp.call(obj, key)) continue;
+          val = obj[key];
+          out[key] = val;
+        }
+      }
+    }
+    return out;
+  };
+
+  removeClass = function(el, name) {
+    var className, cls, _i, _len, _ref, _results;
+    if (el.classList != null) {
+      _ref = name.split(' ');
+      _results = [];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        cls = _ref[_i];
+        if (cls.trim()) {
+          _results.push(el.classList.remove(cls));
+        }
+      }
+      return _results;
+    } else {
+      className = getClassName(el).replace(new RegExp("(^| )" + (name.split(' ').join('|')) + "( |$)", 'gi'), ' ');
+      return setClassName(el, className);
+    }
+  };
+
+  addClass = function(el, name) {
+    var cls, _i, _len, _ref, _results;
+    if (el.classList != null) {
+      _ref = name.split(' ');
+      _results = [];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        cls = _ref[_i];
+        if (cls.trim()) {
+          _results.push(el.classList.add(cls));
+        }
+      }
+      return _results;
+    } else {
+      removeClass(el, name);
+      cls = getClassName(el) + (" " + name);
+      return setClassName(el, cls);
+    }
+  };
+
+  hasClass = function(el, name) {
+    if (el.classList != null) {
+      return el.classList.contains(name);
+    } else {
+      return new RegExp("(^| )" + name + "( |$)", 'gi').test(getClassName(el));
+    }
+  };
+
+  getClassName = function(el) {
+    if (el.className instanceof SVGAnimatedString) {
+      return el.className.baseVal;
+    } else {
+      return el.className;
+    }
+  };
+
+  setClassName = function(el, className) {
+    return el.setAttribute('class', className);
+  };
+
+  updateClasses = function(el, add, all) {
+    var cls, _i, _j, _len, _len1, _results;
+    for (_i = 0, _len = all.length; _i < _len; _i++) {
+      cls = all[_i];
+      if (__indexOf.call(add, cls) < 0) {
+        if (hasClass(el, cls)) {
+          removeClass(el, cls);
+        }
+      }
+    }
+    _results = [];
+    for (_j = 0, _len1 = add.length; _j < _len1; _j++) {
+      cls = add[_j];
+      if (!hasClass(el, cls)) {
+        _results.push(addClass(el, cls));
+      } else {
+        _results.push(void 0);
+      }
+    }
+    return _results;
+  };
+
+  deferred = [];
+
+  defer = function(fn) {
+    return deferred.push(fn);
+  };
+
+  flush = function() {
+    var fn, _results;
+    _results = [];
+    while (fn = deferred.pop()) {
+      _results.push(fn());
+    }
+    return _results;
+  };
+
+  Evented = (function() {
+    function Evented() {}
+
+    Evented.prototype.on = function(event, handler, ctx, once) {
+      var _base;
+      if (once == null) {
+        once = false;
+      }
+      if (this.bindings == null) {
+        this.bindings = {};
+      }
+      if ((_base = this.bindings)[event] == null) {
+        _base[event] = [];
+      }
+      return this.bindings[event].push({
+        handler: handler,
+        ctx: ctx,
+        once: once
+      });
+    };
+
+    Evented.prototype.once = function(event, handler, ctx) {
+      return this.on(event, handler, ctx, true);
+    };
+
+    Evented.prototype.off = function(event, handler) {
+      var i, _ref, _results;
+      if (((_ref = this.bindings) != null ? _ref[event] : void 0) == null) {
+        return;
+      }
+      if (handler == null) {
+        return delete this.bindings[event];
+      } else {
+        i = 0;
+        _results = [];
+        while (i < this.bindings[event].length) {
+          if (this.bindings[event][i].handler === handler) {
+            _results.push(this.bindings[event].splice(i, 1));
+          } else {
+            _results.push(i++);
+          }
+        }
+        return _results;
+      }
+    };
+
+    Evented.prototype.trigger = function() {
+      var args, ctx, event, handler, i, once, _ref, _ref1, _results;
+      event = arguments[0], args = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
+      if ((_ref = this.bindings) != null ? _ref[event] : void 0) {
+        i = 0;
+        _results = [];
+        while (i < this.bindings[event].length) {
+          _ref1 = this.bindings[event][i], handler = _ref1.handler, ctx = _ref1.ctx, once = _ref1.once;
+          handler.apply(ctx != null ? ctx : this, args);
+          if (once) {
+            _results.push(this.bindings[event].splice(i, 1));
+          } else {
+            _results.push(i++);
+          }
+        }
+        return _results;
+      }
+    };
+
+    return Evented;
+
+  })();
+
+  this.Tether.Utils = {
+    getScrollParent: getScrollParent,
+    getBounds: getBounds,
+    getOffsetParent: getOffsetParent,
+    extend: extend,
+    addClass: addClass,
+    removeClass: removeClass,
+    hasClass: hasClass,
+    updateClasses: updateClasses,
+    defer: defer,
+    flush: flush,
+    uniqueId: uniqueId,
+    Evented: Evented,
+    getScrollBarSize: getScrollBarSize
+  };
+
+}).call(this);
+
+(function() {
+  var MIRROR_LR, MIRROR_TB, OFFSET_MAP, Tether, addClass, addOffset, attachmentToOffset, autoToFixedAttachment, defer, extend, flush, getBounds, getOffsetParent, getOuterSize, getScrollBarSize, getScrollParent, getSize, now, offsetToPx, parseAttachment, parseOffset, position, removeClass, tethers, transformKey, updateClasses, within, _Tether, _ref,
+    __slice = [].slice,
+    __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+
+  if (this.Tether == null) {
+    throw new Error("You must include the utils.js file before tether.js");
+  }
+
+  Tether = this.Tether;
+
+  _ref = Tether.Utils, getScrollParent = _ref.getScrollParent, getSize = _ref.getSize, getOuterSize = _ref.getOuterSize, getBounds = _ref.getBounds, getOffsetParent = _ref.getOffsetParent, extend = _ref.extend, addClass = _ref.addClass, removeClass = _ref.removeClass, updateClasses = _ref.updateClasses, defer = _ref.defer, flush = _ref.flush, getScrollBarSize = _ref.getScrollBarSize;
+
+  within = function(a, b, diff) {
+    if (diff == null) {
+      diff = 1;
+    }
+    return (a + diff >= b && b >= a - diff);
+  };
+
+  transformKey = (function() {
+    var el, key, _i, _len, _ref1;
+    el = document.createElement('div');
+    _ref1 = ['transform', 'webkitTransform', 'OTransform', 'MozTransform', 'msTransform'];
+    for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+      key = _ref1[_i];
+      if (el.style[key] !== void 0) {
+        return key;
+      }
+    }
+  })();
+
+  tethers = [];
+
+  position = function() {
+    var tether, _i, _len;
+    for (_i = 0, _len = tethers.length; _i < _len; _i++) {
+      tether = tethers[_i];
+      tether.position(false);
+    }
+    return flush();
+  };
+
+  now = function() {
+    var _ref1;
+    return (_ref1 = typeof performance !== "undefined" && performance !== null ? typeof performance.now === "function" ? performance.now() : void 0 : void 0) != null ? _ref1 : +(new Date);
+  };
+
+  (function() {
+    var event, lastCall, lastDuration, pendingTimeout, tick, _i, _len, _ref1, _results;
+    lastCall = null;
+    lastDuration = null;
+    pendingTimeout = null;
+    tick = function() {
+      if ((lastDuration != null) && lastDuration > 16) {
+        lastDuration = Math.min(lastDuration - 16, 250);
+        pendingTimeout = setTimeout(tick, 250);
+        return;
+      }
+      if ((lastCall != null) && (now() - lastCall) < 10) {
+        return;
+      }
+      if (pendingTimeout != null) {
+        clearTimeout(pendingTimeout);
+        pendingTimeout = null;
+      }
+      lastCall = now();
+      position();
+      return lastDuration = now() - lastCall;
+    };
+    _ref1 = ['resize', 'scroll', 'touchmove'];
+    _results = [];
+    for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+      event = _ref1[_i];
+      _results.push(window.addEventListener(event, tick));
+    }
+    return _results;
+  })();
+
+  MIRROR_LR = {
+    center: 'center',
+    left: 'right',
+    right: 'left'
+  };
+
+  MIRROR_TB = {
+    middle: 'middle',
+    top: 'bottom',
+    bottom: 'top'
+  };
+
+  OFFSET_MAP = {
+    top: 0,
+    left: 0,
+    middle: '50%',
+    center: '50%',
+    bottom: '100%',
+    right: '100%'
+  };
+
+  autoToFixedAttachment = function(attachment, relativeToAttachment) {
+    var left, top;
+    left = attachment.left, top = attachment.top;
+    if (left === 'auto') {
+      left = MIRROR_LR[relativeToAttachment.left];
+    }
+    if (top === 'auto') {
+      top = MIRROR_TB[relativeToAttachment.top];
+    }
+    return {
+      left: left,
+      top: top
+    };
+  };
+
+  attachmentToOffset = function(attachment) {
+    var _ref1, _ref2;
+    return {
+      left: (_ref1 = OFFSET_MAP[attachment.left]) != null ? _ref1 : attachment.left,
+      top: (_ref2 = OFFSET_MAP[attachment.top]) != null ? _ref2 : attachment.top
+    };
+  };
+
+  addOffset = function() {
+    var left, offsets, out, top, _i, _len, _ref1;
+    offsets = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+    out = {
+      top: 0,
+      left: 0
+    };
+    for (_i = 0, _len = offsets.length; _i < _len; _i++) {
+      _ref1 = offsets[_i], top = _ref1.top, left = _ref1.left;
+      if (typeof top === 'string') {
+        top = parseFloat(top, 10);
+      }
+      if (typeof left === 'string') {
+        left = parseFloat(left, 10);
+      }
+      out.top += top;
+      out.left += left;
+    }
+    return out;
+  };
+
+  offsetToPx = function(offset, size) {
+    if (typeof offset.left === 'string' && offset.left.indexOf('%') !== -1) {
+      offset.left = parseFloat(offset.left, 10) / 100 * size.width;
+    }
+    if (typeof offset.top === 'string' && offset.top.indexOf('%') !== -1) {
+      offset.top = parseFloat(offset.top, 10) / 100 * size.height;
+    }
+    return offset;
+  };
+
+  parseAttachment = parseOffset = function(value) {
+    var left, top, _ref1;
+    _ref1 = value.split(' '), top = _ref1[0], left = _ref1[1];
+    return {
+      top: top,
+      left: left
+    };
+  };
+
+  _Tether = (function() {
+    _Tether.modules = [];
+
+    function _Tether(options) {
+      this.position = __bind(this.position, this);
+      var module, _i, _len, _ref1, _ref2;
+      tethers.push(this);
+      this.history = [];
+      this.setOptions(options, false);
+      _ref1 = Tether.modules;
+      for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+        module = _ref1[_i];
+        if ((_ref2 = module.initialize) != null) {
+          _ref2.call(this);
+        }
+      }
+      this.position();
+    }
+
+    _Tether.prototype.getClass = function(key) {
+      var _ref1, _ref2;
+      if ((_ref1 = this.options.classes) != null ? _ref1[key] : void 0) {
+        return this.options.classes[key];
+      } else if (((_ref2 = this.options.classes) != null ? _ref2[key] : void 0) !== false) {
+        if (this.options.classPrefix) {
+          return "" + this.options.classPrefix + "-" + key;
+        } else {
+          return key;
+        }
+      } else {
+        return '';
+      }
+    };
+
+    _Tether.prototype.setOptions = function(options, position) {
+      var defaults, key, _i, _len, _ref1, _ref2;
+      this.options = options;
+      if (position == null) {
+        position = true;
+      }
+      defaults = {
+        offset: '0 0',
+        targetOffset: '0 0',
+        targetAttachment: 'auto auto',
+        classPrefix: 'tether'
+      };
+      this.options = extend(defaults, this.options);
+      _ref1 = this.options, this.element = _ref1.element, this.target = _ref1.target, this.targetModifier = _ref1.targetModifier;
+      if (this.target === 'viewport') {
+        this.target = document.body;
+        this.targetModifier = 'visible';
+      } else if (this.target === 'scroll-handle') {
+        this.target = document.body;
+        this.targetModifier = 'scroll-handle';
+      }
+      _ref2 = ['element', 'target'];
+      for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
+        key = _ref2[_i];
+        if (this[key] == null) {
+          throw new Error("Tether Error: Both element and target must be defined");
+        }
+        if (this[key].jquery != null) {
+          this[key] = this[key][0];
+        } else if (typeof this[key] === 'string') {
+          this[key] = document.querySelector(this[key]);
+        }
+      }
+      addClass(this.element, this.getClass('element'));
+      if (this.options.addTargetClasses !== false) {
+        addClass(this.target, this.getClass('target'));
+      }
+      if (!this.options.attachment) {
+        throw new Error("Tether Error: You must provide an attachment");
+      }
+      this.targetAttachment = parseAttachment(this.options.targetAttachment);
+      this.attachment = parseAttachment(this.options.attachment);
+      this.offset = parseOffset(this.options.offset);
+      this.targetOffset = parseOffset(this.options.targetOffset);
+      if (this.scrollParent != null) {
+        this.disable();
+      }
+      if (this.targetModifier === 'scroll-handle') {
+        this.scrollParent = this.target;
+      } else {
+        this.scrollParent = getScrollParent(this.target);
+      }
+      if (this.options.enabled !== false) {
+        return this.enable(position);
+      }
+    };
+
+    _Tether.prototype.getTargetBounds = function() {
+      var bounds, fitAdj, hasBottomScroll, height, out, scrollBottom, scrollPercentage, style, target;
+      if (this.targetModifier != null) {
+        switch (this.targetModifier) {
+          case 'visible':
+            if (this.target === document.body) {
+              return {
+                top: pageYOffset,
+                left: pageXOffset,
+                height: innerHeight,
+                width: innerWidth
+              };
+            } else {
+              bounds = getBounds(this.target);
+              out = {
+                height: bounds.height,
+                width: bounds.width,
+                top: bounds.top,
+                left: bounds.left
+              };
+              out.height = Math.min(out.height, bounds.height - (pageYOffset - bounds.top));
+              out.height = Math.min(out.height, bounds.height - ((bounds.top + bounds.height) - (pageYOffset + innerHeight)));
+              out.height = Math.min(innerHeight, out.height);
+              out.height -= 2;
+              out.width = Math.min(out.width, bounds.width - (pageXOffset - bounds.left));
+              out.width = Math.min(out.width, bounds.width - ((bounds.left + bounds.width) - (pageXOffset + innerWidth)));
+              out.width = Math.min(innerWidth, out.width);
+              out.width -= 2;
+              if (out.top < pageYOffset) {
+                out.top = pageYOffset;
+              }
+              if (out.left < pageXOffset) {
+                out.left = pageXOffset;
+              }
+              return out;
+            }
+            break;
+          case 'scroll-handle':
+            target = this.target;
+            if (target === document.body) {
+              target = document.documentElement;
+              bounds = {
+                left: pageXOffset,
+                top: pageYOffset,
+                height: innerHeight,
+                width: innerWidth
+              };
+            } else {
+              bounds = getBounds(target);
+            }
+            style = getComputedStyle(target);
+            hasBottomScroll = target.scrollWidth > target.clientWidth || 'scroll' === [style.overflow, style.overflowX] || this.target !== document.body;
+            scrollBottom = 0;
+            if (hasBottomScroll) {
+              scrollBottom = 15;
+            }
+            height = bounds.height - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth) - scrollBottom;
+            out = {
+              width: 15,
+              height: height * 0.975 * (height / target.scrollHeight),
+              left: bounds.left + bounds.width - parseFloat(style.borderLeftWidth) - 15
+            };
+            fitAdj = 0;
+            if (height < 408 && this.target === document.body) {
+              fitAdj = -0.00011 * Math.pow(height, 2) - 0.00727 * height + 22.58;
+            }
+            if (this.target !== document.body) {
+              out.height = Math.max(out.height, 24);
+            }
+            scrollPercentage = this.target.scrollTop / (target.scrollHeight - height);
+            out.top = scrollPercentage * (height - out.height - fitAdj) + bounds.top + parseFloat(style.borderTopWidth);
+            if (this.target === document.body) {
+              out.height = Math.max(out.height, 24);
+            }
+            return out;
+        }
+      } else {
+        return getBounds(this.target);
+      }
+    };
+
+    _Tether.prototype.clearCache = function() {
+      return this._cache = {};
+    };
+
+    _Tether.prototype.cache = function(k, getter) {
+      if (this._cache == null) {
+        this._cache = {};
+      }
+      if (this._cache[k] == null) {
+        this._cache[k] = getter.call(this);
+      }
+      return this._cache[k];
+    };
+
+    _Tether.prototype.enable = function(position) {
+      if (position == null) {
+        position = true;
+      }
+      if (this.options.addTargetClasses !== false) {
+        addClass(this.target, this.getClass('enabled'));
+      }
+      addClass(this.element, this.getClass('enabled'));
+      this.enabled = true;
+      if (this.scrollParent !== document) {
+        this.scrollParent.addEventListener('scroll', this.position);
+      }
+      if (position) {
+        return this.position();
+      }
+    };
+
+    _Tether.prototype.disable = function() {
+      removeClass(this.target, this.getClass('enabled'));
+      removeClass(this.element, this.getClass('enabled'));
+      this.enabled = false;
+      if (this.scrollParent != null) {
+        return this.scrollParent.removeEventListener('scroll', this.position);
+      }
+    };
+
+    _Tether.prototype.destroy = function() {
+      var i, tether, _i, _len, _results;
+      this.disable();
+      _results = [];
+      for (i = _i = 0, _len = tethers.length; _i < _len; i = ++_i) {
+        tether = tethers[i];
+        if (tether === this) {
+          tethers.splice(i, 1);
+          break;
+        } else {
+          _results.push(void 0);
+        }
+      }
+      return _results;
+    };
+
+    _Tether.prototype.updateAttachClasses = function(elementAttach, targetAttach) {
+      var add, all, side, sides, _i, _j, _len, _len1, _ref1,
+        _this = this;
+      if (elementAttach == null) {
+        elementAttach = this.attachment;
+      }
+      if (targetAttach == null) {
+        targetAttach = this.targetAttachment;
+      }
+      sides = ['left', 'top', 'bottom', 'right', 'middle', 'center'];
+      if ((_ref1 = this._addAttachClasses) != null ? _ref1.length : void 0) {
+        this._addAttachClasses.splice(0, this._addAttachClasses.length);
+      }
+      add = this._addAttachClasses != null ? this._addAttachClasses : this._addAttachClasses = [];
+      if (elementAttach.top) {
+        add.push("" + (this.getClass('element-attached')) + "-" + elementAttach.top);
+      }
+      if (elementAttach.left) {
+        add.push("" + (this.getClass('element-attached')) + "-" + elementAttach.left);
+      }
+      if (targetAttach.top) {
+        add.push("" + (this.getClass('target-attached')) + "-" + targetAttach.top);
+      }
+      if (targetAttach.left) {
+        add.push("" + (this.getClass('target-attached')) + "-" + targetAttach.left);
+      }
+      all = [];
+      for (_i = 0, _len = sides.length; _i < _len; _i++) {
+        side = sides[_i];
+        all.push("" + (this.getClass('element-attached')) + "-" + side);
+      }
+      for (_j = 0, _len1 = sides.length; _j < _len1; _j++) {
+        side = sides[_j];
+        all.push("" + (this.getClass('target-attached')) + "-" + side);
+      }
+      return defer(function() {
+        if (_this._addAttachClasses == null) {
+          return;
+        }
+        updateClasses(_this.element, _this._addAttachClasses, all);
+        if (_this.options.addTargetClasses !== false) {
+          updateClasses(_this.target, _this._addAttachClasses, all);
+        }
+        return _this._addAttachClasses = void 0;
+      });
+    };
+
+    _Tether.prototype.position = function(flushChanges) {
+      var elementPos, elementStyle, height, left, manualOffset, manualTargetOffset, module, next, offset, offsetBorder, offsetParent, offsetParentSize, offsetParentStyle, offsetPosition, ret, scrollLeft, scrollTop, scrollbarSize, side, targetAttachment, targetOffset, targetPos, targetSize, top, width, _i, _j, _len, _len1, _ref1, _ref2, _ref3, _ref4, _ref5, _ref6,
+        _this = this;
+      if (flushChanges == null) {
+        flushChanges = true;
+      }
+      if (!this.enabled) {
+        return;
+      }
+      this.clearCache();
+      targetAttachment = autoToFixedAttachment(this.targetAttachment, this.attachment);
+      this.updateAttachClasses(this.attachment, targetAttachment);
+      elementPos = this.cache('element-bounds', function() {
+        return getBounds(_this.element);
+      });
+      width = elementPos.width, height = elementPos.height;
+      if (width === 0 && height === 0 && (this.lastSize != null)) {
+        _ref1 = this.lastSize, width = _ref1.width, height = _ref1.height;
+      } else {
+        this.lastSize = {
+          width: width,
+          height: height
+        };
+      }
+      targetSize = targetPos = this.cache('target-bounds', function() {
+        return _this.getTargetBounds();
+      });
+      offset = offsetToPx(attachmentToOffset(this.attachment), {
+        width: width,
+        height: height
+      });
+      targetOffset = offsetToPx(attachmentToOffset(targetAttachment), targetSize);
+      manualOffset = offsetToPx(this.offset, {
+        width: width,
+        height: height
+      });
+      manualTargetOffset = offsetToPx(this.targetOffset, targetSize);
+      offset = addOffset(offset, manualOffset);
+      targetOffset = addOffset(targetOffset, manualTargetOffset);
+      left = targetPos.left + targetOffset.left - offset.left;
+      top = targetPos.top + targetOffset.top - offset.top;
+      _ref2 = Tether.modules;
+      for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
+        module = _ref2[_i];
+        ret = module.position.call(this, {
+          left: left,
+          top: top,
+          targetAttachment: targetAttachment,
+          targetPos: targetPos,
+          attachment: this.attachment,
+          elementPos: elementPos,
+          offset: offset,
+          targetOffset: targetOffset,
+          manualOffset: manualOffset,
+          manualTargetOffset: manualTargetOffset,
+          scrollbarSize: scrollbarSize
+        });
+        if (ret === false) {
+          return false;
+        } else if ((ret == null) || typeof ret !== 'object') {
+          continue;
+        } else {
+          top = ret.top, left = ret.left;
+        }
+      }
+      next = {
+        page: {
+          top: top,
+          left: left
+        },
+        viewport: {
+          top: top - pageYOffset,
+          bottom: pageYOffset - top - height + innerHeight,
+          left: left - pageXOffset,
+          right: pageXOffset - left - width + innerWidth
+        }
+      };
+      if (document.body.scrollWidth > window.innerWidth) {
+        scrollbarSize = this.cache('scrollbar-size', getScrollBarSize);
+        next.viewport.bottom -= scrollbarSize.height;
+      }
+      if (document.body.scrollHeight > window.innerHeight) {
+        scrollbarSize = this.cache('scrollbar-size', getScrollBarSize);
+        next.viewport.right -= scrollbarSize.width;
+      }
+      if (((_ref3 = document.body.style.position) !== '' && _ref3 !== 'static') || ((_ref4 = document.body.parentElement.style.position) !== '' && _ref4 !== 'static')) {
+        next.page.bottom = document.body.scrollHeight - top - height;
+        next.page.right = document.body.scrollWidth - left - width;
+      }
+      if (((_ref5 = this.options.optimizations) != null ? _ref5.moveElement : void 0) !== false && (this.targetModifier == null)) {
+        offsetParent = this.cache('target-offsetparent', function() {
+          return getOffsetParent(_this.target);
+        });
+        offsetPosition = this.cache('target-offsetparent-bounds', function() {
+          return getBounds(offsetParent);
+        });
+        offsetParentStyle = getComputedStyle(offsetParent);
+        elementStyle = getComputedStyle(this.element);
+        offsetParentSize = offsetPosition;
+        offsetBorder = {};
+        _ref6 = ['Top', 'Left', 'Bottom', 'Right'];
+        for (_j = 0, _len1 = _ref6.length; _j < _len1; _j++) {
+          side = _ref6[_j];
+          offsetBorder[side.toLowerCase()] = parseFloat(offsetParentStyle["border" + side + "Width"]);
+        }
+        offsetPosition.right = document.body.scrollWidth - offsetPosition.left - offsetParentSize.width + offsetBorder.right;
+        offsetPosition.bottom = document.body.scrollHeight - offsetPosition.top - offsetParentSize.height + offsetBorder.bottom;
+        if (next.page.top >= (offsetPosition.top + offsetBorder.top) && next.page.bottom >= offsetPosition.bottom) {
+          if (next.page.left >= (offsetPosition.left + offsetBorder.left) && next.page.right >= offsetPosition.right) {
+            scrollTop = offsetParent.scrollTop;
+            scrollLeft = offsetParent.scrollLeft;
+            next.offset = {
+              top: next.page.top - offsetPosition.top + scrollTop - offsetBorder.top,
+              left: next.page.left - offsetPosition.left + scrollLeft - offsetBorder.left
+            };
+          }
+        }
+      }
+      this.move(next);
+      this.history.unshift(next);
+      if (this.history.length > 3) {
+        this.history.pop();
+      }
+      if (flushChanges) {
+        flush();
+      }
+      return true;
+    };
+
+    _Tether.prototype.move = function(position) {
+      var css, elVal, found, key, moved, offsetParent, point, same, transcribe, type, val, write, writeCSS, _i, _len, _ref1, _ref2,
+        _this = this;
+      if (this.element.parentNode == null) {
+        return;
+      }
+      same = {};
+      for (type in position) {
+        same[type] = {};
+        for (key in position[type]) {
+          found = false;
+          _ref1 = this.history;
+          for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+            point = _ref1[_i];
+            if (!within((_ref2 = point[type]) != null ? _ref2[key] : void 0, position[type][key])) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            same[type][key] = true;
+          }
+        }
+      }
+      css = {
+        top: '',
+        left: '',
+        right: '',
+        bottom: ''
+      };
+      transcribe = function(same, pos) {
+        var xPos, yPos, _ref3;
+        if (((_ref3 = _this.options.optimizations) != null ? _ref3.gpu : void 0) !== false) {
+          if (same.top) {
+            css.top = 0;
+            yPos = pos.top;
+          } else {
+            css.bottom = 0;
+            yPos = -pos.bottom;
+          }
+          if (same.left) {
+            css.left = 0;
+            xPos = pos.left;
+          } else {
+            css.right = 0;
+            xPos = -pos.right;
+          }
+          css[transformKey] = "translateX(" + (Math.round(xPos)) + "px) translateY(" + (Math.round(yPos)) + "px)";
+          if (transformKey !== 'msTransform') {
+            return css[transformKey] += " translateZ(0)";
+          }
+        } else {
+          if (same.top) {
+            css.top = "" + pos.top + "px";
+          } else {
+            css.bottom = "" + pos.bottom + "px";
+          }
+          if (same.left) {
+            return css.left = "" + pos.left + "px";
+          } else {
+            return css.right = "" + pos.right + "px";
+          }
+        }
+      };
+      moved = false;
+      if ((same.page.top || same.page.bottom) && (same.page.left || same.page.right)) {
+        css.position = 'absolute';
+        transcribe(same.page, position.page);
+      } else if ((same.viewport.top || same.viewport.bottom) && (same.viewport.left || same.viewport.right)) {
+        css.position = 'fixed';
+        transcribe(same.viewport, position.viewport);
+      } else if ((same.offset != null) && same.offset.top && same.offset.left) {
+        css.position = 'absolute';
+        offsetParent = this.cache('target-offsetparent', function() {
+          return getOffsetParent(_this.target);
+        });
+        if (getOffsetParent(this.element) !== offsetParent) {
+          defer(function() {
+            _this.element.parentNode.removeChild(_this.element);
+            return offsetParent.appendChild(_this.element);
+          });
+        }
+        transcribe(same.offset, position.offset);
+        moved = true;
+      } else {
+        css.position = 'absolute';
+        transcribe({
+          top: true,
+          left: true
+        }, position.page);
+      }
+      if (!moved && this.element.parentNode.tagName !== 'BODY') {
+        this.element.parentNode.removeChild(this.element);
+        document.body.appendChild(this.element);
+      }
+      writeCSS = {};
+      write = false;
+      for (key in css) {
+        val = css[key];
+        elVal = this.element.style[key];
+        if (elVal !== '' && val !== '' && (key === 'top' || key === 'left' || key === 'bottom' || key === 'right')) {
+          elVal = parseFloat(elVal);
+          val = parseFloat(val);
+        }
+        if (elVal !== val) {
+          write = true;
+          writeCSS[key] = css[key];
+        }
+      }
+      if (write) {
+        return defer(function() {
+          return extend(_this.element.style, writeCSS);
+        });
+      }
+    };
+
+    return _Tether;
+
+  })();
+
+  Tether.position = position;
+
+  this.Tether = extend(_Tether, Tether);
+
+}).call(this);
+
+(function() {
+  var BOUNDS_FORMAT, MIRROR_ATTACH, defer, extend, getBoundingRect, getBounds, getOuterSize, getSize, updateClasses, _ref,
+    __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
+
+  _ref = this.Tether.Utils, getOuterSize = _ref.getOuterSize, getBounds = _ref.getBounds, getSize = _ref.getSize, extend = _ref.extend, updateClasses = _ref.updateClasses, defer = _ref.defer;
+
+  MIRROR_ATTACH = {
+    left: 'right',
+    right: 'left',
+    top: 'bottom',
+    bottom: 'top',
+    middle: 'middle'
+  };
+
+  BOUNDS_FORMAT = ['left', 'top', 'right', 'bottom'];
+
+  getBoundingRect = function(tether, to) {
+    var i, pos, side, size, style, _i, _len;
+    if (to === 'scrollParent') {
+      to = tether.scrollParent;
+    } else if (to === 'window') {
+      to = [pageXOffset, pageYOffset, innerWidth + pageXOffset, innerHeight + pageYOffset];
+    }
+    if (to === document) {
+      to = to.documentElement;
+    }
+    if (to.nodeType != null) {
+      pos = size = getBounds(to);
+      style = getComputedStyle(to);
+      to = [pos.left, pos.top, size.width + pos.left, size.height + pos.top];
+      for (i = _i = 0, _len = BOUNDS_FORMAT.length; _i < _len; i = ++_i) {
+        side = BOUNDS_FORMAT[i];
+        side = side[0].toUpperCase() + side.substr(1);
+        if (side === 'Top' || side === 'Left') {
+          to[i] += parseFloat(style["border" + side + "Width"]);
+        } else {
+          to[i] -= parseFloat(style["border" + side + "Width"]);
+        }
+      }
+    }
+    return to;
+  };
+
+  this.Tether.modules.push({
+    position: function(_arg) {
+      var addClasses, allClasses, attachment, bounds, changeAttachX, changeAttachY, cls, constraint, eAttachment, height, left, oob, oobClass, p, pin, pinned, pinnedClass, removeClass, side, tAttachment, targetAttachment, targetHeight, targetSize, targetWidth, to, top, width, _i, _j, _k, _l, _len, _len1, _len2, _len3, _len4, _len5, _m, _n, _ref1, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7, _ref8,
+        _this = this;
+      top = _arg.top, left = _arg.left, targetAttachment = _arg.targetAttachment;
+      if (!this.options.constraints) {
+        return true;
+      }
+      removeClass = function(prefix) {
+        var side, _i, _len, _results;
+        _this.removeClass(prefix);
+        _results = [];
+        for (_i = 0, _len = BOUNDS_FORMAT.length; _i < _len; _i++) {
+          side = BOUNDS_FORMAT[_i];
+          _results.push(_this.removeClass("" + prefix + "-" + side));
+        }
+        return _results;
+      };
+      _ref1 = this.cache('element-bounds', function() {
+        return getBounds(_this.element);
+      }), height = _ref1.height, width = _ref1.width;
+      if (width === 0 && height === 0 && (this.lastSize != null)) {
+        _ref2 = this.lastSize, width = _ref2.width, height = _ref2.height;
+      }
+      targetSize = this.cache('target-bounds', function() {
+        return _this.getTargetBounds();
+      });
+      targetHeight = targetSize.height;
+      targetWidth = targetSize.width;
+      tAttachment = {};
+      eAttachment = {};
+      allClasses = [this.getClass('pinned'), this.getClass('out-of-bounds')];
+      _ref3 = this.options.constraints;
+      for (_i = 0, _len = _ref3.length; _i < _len; _i++) {
+        constraint = _ref3[_i];
+        if (constraint.outOfBoundsClass) {
+          allClasses.push(constraint.outOfBoundsClass);
+        }
+        if (constraint.pinnedClass) {
+          allClasses.push(constraint.pinnedClass);
+        }
+      }
+      for (_j = 0, _len1 = allClasses.length; _j < _len1; _j++) {
+        cls = allClasses[_j];
+        _ref4 = ['left', 'top', 'right', 'bottom'];
+        for (_k = 0, _len2 = _ref4.length; _k < _len2; _k++) {
+          side = _ref4[_k];
+          allClasses.push("" + cls + "-" + side);
+        }
+      }
+      addClasses = [];
+      tAttachment = extend({}, targetAttachment);
+      eAttachment = extend({}, this.attachment);
+      _ref5 = this.options.constraints;
+      for (_l = 0, _len3 = _ref5.length; _l < _len3; _l++) {
+        constraint = _ref5[_l];
+        to = constraint.to, attachment = constraint.attachment, pin = constraint.pin;
+        if (attachment == null) {
+          attachment = '';
+        }
+        if (__indexOf.call(attachment, ' ') >= 0) {
+          _ref6 = attachment.split(' '), changeAttachY = _ref6[0], changeAttachX = _ref6[1];
+        } else {
+          changeAttachX = changeAttachY = attachment;
+        }
+        bounds = getBoundingRect(this, to);
+        if (changeAttachY === 'target' || changeAttachY === 'both') {
+          if (top < bounds[1] && tAttachment.top === 'top') {
+            top += targetHeight;
+            tAttachment.top = 'bottom';
+          }
+          if (top + height > bounds[3] && tAttachment.top === 'bottom') {
+            top -= targetHeight;
+            tAttachment.top = 'top';
+          }
+        }
+        if (changeAttachY === 'together') {
+          if (top < bounds[1] && tAttachment.top === 'top') {
+            if (eAttachment.top === 'bottom') {
+              top += targetHeight;
+              tAttachment.top = 'bottom';
+              top += height;
+              eAttachment.top = 'top';
+            } else if (eAttachment.top === 'top') {
+              top += targetHeight;
+              tAttachment.top = 'bottom';
+              top -= height;
+              eAttachment.top = 'bottom';
+            }
+          }
+          if (top + height > bounds[3] && tAttachment.top === 'bottom') {
+            if (eAttachment.top === 'top') {
+              top -= targetHeight;
+              tAttachment.top = 'top';
+              top -= height;
+              eAttachment.top = 'bottom';
+            } else if (eAttachment.top === 'bottom') {
+              top -= targetHeight;
+              tAttachment.top = 'top';
+              top += height;
+              eAttachment.top = 'top';
+            }
+          }
+          if (tAttachment.top === 'middle') {
+            if (top + height > bounds[3] && eAttachment.top === 'top') {
+              top -= height;
+              eAttachment.top = 'bottom';
+            } else if (top < bounds[1] && eAttachment.top === 'bottom') {
+              top += height;
+              eAttachment.top = 'top';
+            }
+          }
+        }
+        if (changeAttachX === 'target' || changeAttachX === 'both') {
+          if (left < bounds[0] && tAttachment.left === 'left') {
+            left += targetWidth;
+            tAttachment.left = 'right';
+          }
+          if (left + width > bounds[2] && tAttachment.left === 'right') {
+            left -= targetWidth;
+            tAttachment.left = 'left';
+          }
+        }
+        if (changeAttachX === 'together') {
+          if (left < bounds[0] && tAttachment.left === 'left') {
+            if (eAttachment.left === 'right') {
+              left += targetWidth;
+              tAttachment.left = 'right';
+              left += width;
+              eAttachment.left = 'left';
+            } else if (eAttachment.left === 'left') {
+              left += targetWidth;
+              tAttachment.left = 'right';
+              left -= width;
+              eAttachment.left = 'right';
+            }
+          } else if (left + width > bounds[2] && tAttachment.left === 'right') {
+            if (eAttachment.left === 'left') {
+              left -= targetWidth;
+              tAttachment.left = 'left';
+              left -= width;
+              eAttachment.left = 'right';
+            } else if (eAttachment.left === 'right') {
+              left -= targetWidth;
+              tAttachment.left = 'left';
+              left += width;
+              eAttachment.left = 'left';
+            }
+          } else if (tAttachment.left === 'center') {
+            if (left + width > bounds[2] && eAttachment.left === 'left') {
+              left -= width;
+              eAttachment.left = 'right';
+            } else if (left < bounds[0] && eAttachment.left === 'right') {
+              left += width;
+              eAttachment.left = 'left';
+            }
+          }
+        }
+        if (changeAttachY === 'element' || changeAttachY === 'both') {
+          if (top < bounds[1] && eAttachment.top === 'bottom') {
+            top += height;
+            eAttachment.top = 'top';
+          }
+          if (top + height > bounds[3] && eAttachment.top === 'top') {
+            top -= height;
+            eAttachment.top = 'bottom';
+          }
+        }
+        if (changeAttachX === 'element' || changeAttachX === 'both') {
+          if (left < bounds[0] && eAttachment.left === 'right') {
+            left += width;
+            eAttachment.left = 'left';
+          }
+          if (left + width > bounds[2] && eAttachment.left === 'left') {
+            left -= width;
+            eAttachment.left = 'right';
+          }
+        }
+        if (typeof pin === 'string') {
+          pin = (function() {
+            var _len4, _m, _ref7, _results;
+            _ref7 = pin.split(',');
+            _results = [];
+            for (_m = 0, _len4 = _ref7.length; _m < _len4; _m++) {
+              p = _ref7[_m];
+              _results.push(p.trim());
+            }
+            return _results;
+          })();
+        } else if (pin === true) {
+          pin = ['top', 'left', 'right', 'bottom'];
+        }
+        pin || (pin = []);
+        pinned = [];
+        oob = [];
+        if (top < bounds[1]) {
+          if (__indexOf.call(pin, 'top') >= 0) {
+            top = bounds[1];
+            pinned.push('top');
+          } else {
+            oob.push('top');
+          }
+        }
+        if (top + height > bounds[3]) {
+          if (__indexOf.call(pin, 'bottom') >= 0) {
+            top = bounds[3] - height;
+            pinned.push('bottom');
+          } else {
+            oob.push('bottom');
+          }
+        }
+        if (left < bounds[0]) {
+          if (__indexOf.call(pin, 'left') >= 0) {
+            left = bounds[0];
+            pinned.push('left');
+          } else {
+            oob.push('left');
+          }
+        }
+        if (left + width > bounds[2]) {
+          if (__indexOf.call(pin, 'right') >= 0) {
+            left = bounds[2] - width;
+            pinned.push('right');
+          } else {
+            oob.push('right');
+          }
+        }
+        if (pinned.length) {
+          pinnedClass = (_ref7 = this.options.pinnedClass) != null ? _ref7 : this.getClass('pinned');
+          addClasses.push(pinnedClass);
+          for (_m = 0, _len4 = pinned.length; _m < _len4; _m++) {
+            side = pinned[_m];
+            addClasses.push("" + pinnedClass + "-" + side);
+          }
+        }
+        if (oob.length) {
+          oobClass = (_ref8 = this.options.outOfBoundsClass) != null ? _ref8 : this.getClass('out-of-bounds');
+          addClasses.push(oobClass);
+          for (_n = 0, _len5 = oob.length; _n < _len5; _n++) {
+            side = oob[_n];
+            addClasses.push("" + oobClass + "-" + side);
+          }
+        }
+        if (__indexOf.call(pinned, 'left') >= 0 || __indexOf.call(pinned, 'right') >= 0) {
+          eAttachment.left = tAttachment.left = false;
+        }
+        if (__indexOf.call(pinned, 'top') >= 0 || __indexOf.call(pinned, 'bottom') >= 0) {
+          eAttachment.top = tAttachment.top = false;
+        }
+        if (tAttachment.top !== targetAttachment.top || tAttachment.left !== targetAttachment.left || eAttachment.top !== this.attachment.top || eAttachment.left !== this.attachment.left) {
+          this.updateAttachClasses(eAttachment, tAttachment);
+        }
+      }
+      defer(function() {
+        if (_this.options.addTargetClasses !== false) {
+          updateClasses(_this.target, addClasses, allClasses);
+        }
+        return updateClasses(_this.element, addClasses, allClasses);
+      });
+      return {
+        top: top,
+        left: left
+      };
+    }
+  });
+
+}).call(this);
+
+(function() {
+  var defer, getBounds, updateClasses, _ref;
+
+  _ref = this.Tether.Utils, getBounds = _ref.getBounds, updateClasses = _ref.updateClasses, defer = _ref.defer;
+
+  this.Tether.modules.push({
+    position: function(_arg) {
+      var abutted, addClasses, allClasses, bottom, height, left, right, side, sides, targetPos, top, width, _i, _j, _k, _l, _len, _len1, _len2, _len3, _ref1, _ref2, _ref3, _ref4, _ref5,
+        _this = this;
+      top = _arg.top, left = _arg.left;
+      _ref1 = this.cache('element-bounds', function() {
+        return getBounds(_this.element);
+      }), height = _ref1.height, width = _ref1.width;
+      targetPos = this.getTargetBounds();
+      bottom = top + height;
+      right = left + width;
+      abutted = [];
+      if (top <= targetPos.bottom && bottom >= targetPos.top) {
+        _ref2 = ['left', 'right'];
+        for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
+          side = _ref2[_i];
+          if ((_ref3 = targetPos[side]) === left || _ref3 === right) {
+            abutted.push(side);
+          }
+        }
+      }
+      if (left <= targetPos.right && right >= targetPos.left) {
+        _ref4 = ['top', 'bottom'];
+        for (_j = 0, _len1 = _ref4.length; _j < _len1; _j++) {
+          side = _ref4[_j];
+          if ((_ref5 = targetPos[side]) === top || _ref5 === bottom) {
+            abutted.push(side);
+          }
+        }
+      }
+      allClasses = [];
+      addClasses = [];
+      sides = ['left', 'top', 'right', 'bottom'];
+      allClasses.push(this.getClass('abutted'));
+      for (_k = 0, _len2 = sides.length; _k < _len2; _k++) {
+        side = sides[_k];
+        allClasses.push("" + (this.getClass('abutted')) + "-" + side);
+      }
+      if (abutted.length) {
+        addClasses.push(this.getClass('abutted'));
+      }
+      for (_l = 0, _len3 = abutted.length; _l < _len3; _l++) {
+        side = abutted[_l];
+        addClasses.push("" + (this.getClass('abutted')) + "-" + side);
+      }
+      defer(function() {
+        if (_this.options.addTargetClasses !== false) {
+          updateClasses(_this.target, addClasses, allClasses);
+        }
+        return updateClasses(_this.element, addClasses, allClasses);
+      });
+      return true;
+    }
+  });
+
+}).call(this);
+
+(function() {
+  this.Tether.modules.push({
+    position: function(_arg) {
+      var left, result, shift, shiftLeft, shiftTop, top, _ref;
+      top = _arg.top, left = _arg.left;
+      if (!this.options.shift) {
+        return;
+      }
+      result = function(val) {
+        if (typeof val === 'function') {
+          return val.call(this, {
+            top: top,
+            left: left
+          });
+        } else {
+          return val;
+        }
+      };
+      shift = result(this.options.shift);
+      if (typeof shift === 'string') {
+        shift = shift.split(' ');
+        shift[1] || (shift[1] = shift[0]);
+        shiftTop = shift[0], shiftLeft = shift[1];
+        shiftTop = parseFloat(shiftTop, 10);
+        shiftLeft = parseFloat(shiftLeft, 10);
+      } else {
+        _ref = [shift.top, shift.left], shiftTop = _ref[0], shiftLeft = _ref[1];
+      }
+      top += shiftTop;
+      left += shiftLeft;
+      return {
+        top: top,
+        left: left
+      };
+    }
+  });
+
+}).call(this);
+
+return this.Tether;
+
+}));
+
+(function() {
+  var DOWN, ENTER, ESCAPE, Evented, SPACE, Select, UP, addClass, clickEvent, extend, getBounds, getFocusedSelect, hasClass, isRepeatedChar, lastCharacter, removeClass, searchText, searchTextTimeout, touchDevice, useNative, _ref,
+    __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+    __hasProp = {}.hasOwnProperty,
+    __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+
+  _ref = Tether.Utils, extend = _ref.extend, addClass = _ref.addClass, removeClass = _ref.removeClass, hasClass = _ref.hasClass, getBounds = _ref.getBounds, Evented = _ref.Evented;
+
+  ENTER = 13;
+
+  ESCAPE = 27;
+
+  SPACE = 32;
+
+  UP = 38;
+
+  DOWN = 40;
+
+  touchDevice = 'ontouchstart' in document.documentElement;
+
+  clickEvent = touchDevice ? 'touchstart' : 'click';
+
+  useNative = function() {
+    return touchDevice && (innerWidth <= 640 || innerHeight <= 640);
+  };
+
+  isRepeatedChar = function(str) {
+    return Array.prototype.reduce.call(str, function(a, b) {
+      if (a === b) {
+        return b;
+      } else {
+        return false;
+      }
+    });
+  };
+
+  getFocusedSelect = function() {
+    var _ref1;
+    return (_ref1 = document.querySelector('.select-target-focused')) != null ? _ref1.selectInstance : void 0;
+  };
+
+  searchText = '';
+
+  searchTextTimeout = void 0;
+
+  lastCharacter = void 0;
+
+  document.addEventListener('keypress', function(e) {
+    var options, repeatedOptions, select, selected;
+    if (!(select = getFocusedSelect())) {
+      return;
+    }
+    if (e.charCode === 0) {
+      return;
+    }
+    if (e.keyCode === SPACE) {
+      e.preventDefault();
+    }
+    clearTimeout(searchTextTimeout);
+    searchTextTimeout = setTimeout(function() {
+      return searchText = '';
+    }, 500);
+    searchText += String.fromCharCode(e.charCode);
+    options = select.findOptionsByPrefix(searchText);
+    if (options.length === 1) {
+      select.selectOption(options[0]);
+      return;
+    }
+    if (searchText.length > 1 && isRepeatedChar(searchText)) {
+      repeatedOptions = select.findOptionsByPrefix(searchText[0]);
+      if (repeatedOptions.length) {
+        selected = repeatedOptions.indexOf(select.getChosen());
+        selected += 1;
+        selected = selected % repeatedOptions.length;
+        select.selectOption(repeatedOptions[selected]);
+        return;
+      }
+    }
+    if (options.length) {
+      select.selectOption(options[0]);
+    }
+  });
+
+  document.addEventListener('keydown', function(e) {
+    var select, _ref1, _ref2;
+    if (!(select = getFocusedSelect())) {
+      return;
+    }
+    if ((_ref1 = e.keyCode) === UP || _ref1 === DOWN || _ref1 === ESCAPE) {
+      e.preventDefault();
+    }
+    if (select.isOpen()) {
+      switch (e.keyCode) {
+        case UP:
+        case DOWN:
+          return select.moveHighlight(e.keyCode);
+        case ENTER:
+          return select.selectHighlightedOption();
+        case ESCAPE:
+          select.close();
+          return select.target.focus();
+      }
+    } else {
+      if ((_ref2 = e.keyCode) === UP || _ref2 === DOWN || _ref2 === SPACE) {
+        return select.open();
+      }
+    }
+  });
+
+  Select = (function(_super) {
+    __extends(Select, _super);
+
+    Select.defaults = {
+      alignToHighlighed: 'auto',
+      className: 'select-theme-default'
+    };
+
+    function Select(options) {
+      this.options = options;
+      this.update = __bind(this.update, this);
+      this.options = extend({}, Select.defaults, this.options);
+      this.select = this.options.el;
+      if (this.select.selectInstance != null) {
+        throw new Error("This element has already been turned into a Select");
+      }
+      this.setupTarget();
+      this.renderTarget();
+      this.setupDrop();
+      this.renderDrop();
+      this.setupSelect();
+      this.setupTether();
+      this.bindClick();
+      this.bindMutationEvents();
+      this.value = this.select.value;
+    }
+
+    Select.prototype.useNative = function() {
+      return this.options.useNative === true || (useNative() && this.options.useNative !== false);
+    };
+
+    Select.prototype.setupTarget = function() {
+      var tabIndex,
+        _this = this;
+      this.target = document.createElement('a');
+      this.target.href = 'javascript:;';
+      addClass(this.target, 'select-target');
+      tabIndex = this.select.getAttribute('tabindex') || 0;
+      this.target.setAttribute('tabindex', tabIndex);
+      if (this.options.className) {
+        addClass(this.target, this.options.className);
+      }
+      this.target.selectInstance = this;
+      this.target.addEventListener('click', function() {
+        if (!_this.isOpen()) {
+          return _this.target.focus();
+        } else {
+          return _this.target.blur();
+        }
+      });
+      this.target.addEventListener('focus', function() {
+        return addClass(_this.target, 'select-target-focused');
+      });
+      this.target.addEventListener('blur', function(e) {
+        if (_this.isOpen()) {
+          if (e.relatedTarget && !_this.drop.contains(e.relatedTarget)) {
+            _this.close();
+          }
+        }
+        return removeClass(_this.target, 'select-target-focused');
+      });
+      return this.select.parentNode.insertBefore(this.target, this.select.nextSibling);
+    };
+
+    Select.prototype.setupDrop = function() {
+      var _this = this;
+      this.drop = document.createElement('div');
+      addClass(this.drop, 'select');
+      if (this.options.className) {
+        addClass(this.drop, this.options.className);
+      }
+      document.body.appendChild(this.drop);
+      this.drop.addEventListener('click', function(e) {
+        if (hasClass(e.target, 'select-option')) {
+          _this.pickOption(e.target);
+        }
+        return e.stopPropagation();
+      });
+      this.drop.addEventListener('mousemove', function(e) {
+        if (hasClass(e.target, 'select-option')) {
+          return _this.highlightOption(e.target);
+        }
+      });
+      this.content = document.createElement('div');
+      addClass(this.content, 'select-content');
+      return this.drop.appendChild(this.content);
+    };
+
+    Select.prototype.open = function() {
+      var positionSelectStyle, selectedOption,
+        _this = this;
+      addClass(this.target, 'select-open');
+      if (this.useNative()) {
+        this.select.style.display = 'block';
+        setTimeout(function() {
+          var event;
+          event = document.createEvent("MouseEvents");
+          event.initEvent("mousedown", true, true);
+          return _this.select.dispatchEvent(event);
+        });
+        return;
+      }
+      addClass(this.drop, 'select-open');
+      setTimeout(function() {
+        return _this.tether.enable();
+      });
+      selectedOption = this.drop.querySelector('.select-option-selected');
+      if (!selectedOption) {
+        return;
+      }
+      this.highlightOption(selectedOption);
+      this.scrollDropContentToOption(selectedOption);
+      positionSelectStyle = function() {
+        var dropBounds, offset, optionBounds;
+        if (hasClass(_this.drop, 'tether-abutted-left') || hasClass(_this.drop, 'tether-abutted-bottom')) {
+          dropBounds = getBounds(_this.drop);
+          optionBounds = getBounds(selectedOption);
+          offset = dropBounds.top - (optionBounds.top + optionBounds.height);
+          return _this.drop.style.top = (parseFloat(_this.drop.style.top) || 0) + offset + 'px';
+        }
+      };
+      if (this.options.alignToHighlighted === 'always' || (this.options.alignToHighlighted === 'auto' && this.content.scrollHeight <= this.content.clientHeight)) {
+        setTimeout(positionSelectStyle);
+      }
+      return this.trigger('open');
+    };
+
+    Select.prototype.close = function() {
+      removeClass(this.target, 'select-open');
+      if (this.useNative()) {
+        this.select.style.display = 'none';
+        return;
+      }
+      this.tether.disable();
+      removeClass(this.drop, 'select-open');
+      return this.trigger('close');
+    };
+
+    Select.prototype.toggle = function() {
+      if (this.isOpen()) {
+        return this.close();
+      } else {
+        return this.open();
+      }
+    };
+
+    Select.prototype.isOpen = function() {
+      return hasClass(this.drop, 'select-open');
+    };
+
+    Select.prototype.bindClick = function() {
+      var _this = this;
+      this.target.addEventListener(clickEvent, function(e) {
+        e.preventDefault();
+        return _this.toggle();
+      });
+      return document.addEventListener(clickEvent, function(event) {
+        if (!_this.isOpen()) {
+          return;
+        }
+        if (event.target === _this.drop || _this.drop.contains(event.target)) {
+          return;
+        }
+        if (event.target === _this.target || _this.target.contains(event.target)) {
+          return;
+        }
+        return _this.close();
+      });
+    };
+
+    Select.prototype.setupTether = function() {
+      return this.tether = new Tether(extend({
+        element: this.drop,
+        target: this.target,
+        attachment: 'top left',
+        targetAttachment: 'bottom left',
+        classPrefix: 'select',
+        constraints: [
+          {
+            to: 'window',
+            attachment: 'together'
+          }
+        ]
+      }, this.options.tetherOptions));
+    };
+
+    Select.prototype.renderTarget = function() {
+      var option, _i, _len, _ref1;
+      this.target.innerHTML = '';
+      _ref1 = this.select.querySelectorAll('option');
+      for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+        option = _ref1[_i];
+        if (option.selected) {
+          this.target.innerHTML = option.innerHTML;
+          break;
+        }
+      }
+      return this.target.appendChild(document.createElement('b'));
+    };
+
+    Select.prototype.renderDrop = function() {
+      var el, option, optionList, _i, _len, _ref1;
+      optionList = document.createElement('ul');
+      addClass(optionList, 'select-options');
+      _ref1 = this.select.querySelectorAll('option');
+      for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+        el = _ref1[_i];
+        option = document.createElement('li');
+        addClass(option, 'select-option');
+        option.setAttribute('data-value', el.value);
+        option.innerHTML = el.innerHTML;
+        if (el.selected) {
+          addClass(option, 'select-option-selected');
+        }
+        optionList.appendChild(option);
+      }
+      this.content.innerHTML = '';
+      return this.content.appendChild(optionList);
+    };
+
+    Select.prototype.update = function() {
+      this.renderDrop();
+      return this.renderTarget();
+    };
+
+    Select.prototype.setupSelect = function() {
+      this.select.selectInstance = this;
+      addClass(this.select, 'select-select');
+      return this.select.addEventListener('change', this.update);
+    };
+
+    Select.prototype.bindMutationEvents = function() {
+      if (window.MutationObserver != null) {
+        this.observer = new MutationObserver(this.update);
+        return this.observer.observe(this.select, {
+          childList: true,
+          attributes: true,
+          characterData: true,
+          subtree: true
+        });
+      } else {
+        return this.select.addEventListener('DOMSubtreeModified', this.update);
+      }
+    };
+
+    Select.prototype.findOptionsByPrefix = function(text) {
+      var options;
+      options = this.drop.querySelectorAll('.select-option');
+      text = text.toLowerCase();
+      return Array.prototype.filter.call(options, function(option) {
+        return option.innerHTML.toLowerCase().substr(0, text.length) === text;
+      });
+    };
+
+    Select.prototype.findOptionsByValue = function(val) {
+      var options;
+      options = this.drop.querySelectorAll('.select-option');
+      return Array.prototype.filter.call(options, function(option) {
+        return option.getAttribute('data-value') === val;
+      });
+    };
+
+    Select.prototype.getChosen = function() {
+      if (this.isOpen()) {
+        return this.drop.querySelector('.select-option-highlight');
+      } else {
+        return this.drop.querySelector('.select-option-selected');
+      }
+    };
+
+    Select.prototype.selectOption = function(option) {
+      if (this.isOpen()) {
+        this.highlightOption(option);
+        return this.scrollDropContentToOption(option);
+      } else {
+        return this.pickOption(option, false);
+      }
+    };
+
+    Select.prototype.resetSelection = function() {
+      return this.selectOption(this.drop.querySelector('.select-option'));
+    };
+
+    Select.prototype.highlightOption = function(option) {
+      var highlighted;
+      highlighted = this.drop.querySelector('.select-option-highlight');
+      if (highlighted != null) {
+        removeClass(highlighted, 'select-option-highlight');
+      }
+      addClass(option, 'select-option-highlight');
+      return this.trigger('highlight', {
+        option: option
+      });
+    };
+
+    Select.prototype.moveHighlight = function(directionKeyCode) {
+      var highlighted, highlightedIndex, newHighlight, options;
+      if (!(highlighted = this.drop.querySelector('.select-option-highlight'))) {
+        this.highlightOption(this.drop.querySelector('.select-option'));
+        return;
+      }
+      options = this.drop.querySelectorAll('.select-option');
+      highlightedIndex = Array.prototype.indexOf.call(options, highlighted);
+      if (!(highlightedIndex >= 0)) {
+        return;
+      }
+      if (directionKeyCode === UP) {
+        highlightedIndex -= 1;
+      } else {
+        highlightedIndex += 1;
+      }
+      if (highlightedIndex < 0 || highlightedIndex >= options.length) {
+        return;
+      }
+      newHighlight = options[highlightedIndex];
+      this.highlightOption(newHighlight);
+      return this.scrollDropContentToOption(newHighlight);
+    };
+
+    Select.prototype.scrollDropContentToOption = function(option) {
+      var contentBounds, optionBounds;
+      if (this.content.scrollHeight > this.content.clientHeight) {
+        contentBounds = getBounds(this.content);
+        optionBounds = getBounds(option);
+        return this.content.scrollTop = optionBounds.top - (contentBounds.top - this.content.scrollTop);
+      }
+    };
+
+    Select.prototype.selectHighlightedOption = function() {
+      return this.pickOption(this.drop.querySelector('.select-option-highlight'));
+    };
+
+    Select.prototype.pickOption = function(option, close) {
+      var _this = this;
+      if (close == null) {
+        close = true;
+      }
+      this.value = this.select.value = option.getAttribute('data-value');
+      this.triggerChange();
+      if (close) {
+        return setTimeout(function() {
+          _this.close();
+          return _this.target.focus();
+        });
+      }
+    };
+
+    Select.prototype.triggerChange = function() {
+      var event;
+      event = document.createEvent("HTMLEvents");
+      event.initEvent("change", true, false);
+      this.select.dispatchEvent(event);
+      return this.trigger('change', {
+        value: this.select.value
+      });
+    };
+
+    Select.prototype.change = function(val) {
+      var options;
+      options = this.findOptionsByValue(val);
+      if (!options.length) {
+        throw new Error("Select Error: An option with the value \"" + val + "\" doesn't exist");
+      }
+      return this.pickOption(options[0], false);
+    };
+
+    return Select;
+
+  })(Evented);
+
+  Select.init = function(options) {
+    var el, _i, _len, _ref1, _results;
+    if (options == null) {
+      options = {};
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        return Select.init(options);
+      });
+      return;
+    }
+    if (options.selector == null) {
+      options.selector = 'select';
+    }
+    _ref1 = document.querySelectorAll(options.selector);
+    _results = [];
+    for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+      el = _ref1[_i];
+      if (!el.selectInstance) {
+        _results.push(new Select(extend({
+          el: el
+        }, options)));
+      } else {
+        _results.push(void 0);
+      }
+    }
+    return _results;
+  };
+
+  window.Select = Select;
+
+}).call(this);
+
 jQuery(document).ready(function($){
 	/* open folding content */
 	$('.cd-gallery a').on('click', function(event){
@@ -9244,6 +15045,38 @@ jQuery(document).ready(function($){
 		}
 	}
 
+    function createNavMenu(findIn) {
+
+        var conatiner = $('<div id="pageNav">');
+        var select = $('<select>');
+
+        findIn.find('.toNav').each(function() {
+            var e = $(this);
+            var uid = _.uniqueId('nav-element-');
+
+            $(this).attr('id',uid);
+
+            $('<option>',{
+                'value': uid,
+                'text': e.text()
+            }).appendTo(select);
+        });
+
+        select.appendTo(conatiner);
+        conatiner.prependTo(findIn);
+
+        Select.init();
+
+        select.on('change', function() {
+
+            var e = $(this);
+
+            findIn.scrollTo($('#' + e.val()),{
+                duration: 300
+            });
+        });
+    }
+
 	function toggleContent(url, bool) {
 		if( bool ) {
 			/* load and show new content */
@@ -9255,11 +15088,13 @@ jQuery(document).ready(function($){
 					$('.cd-main').addClass('fold-is-open');
 				}, 100);
 
-				$('.cd-fold-content').find('.pop-image').magnificPopup({
+				foldingContent.find('.pop-image').magnificPopup({
 					type: 'image',
 					removalDelay: 300,
 					mainClass: 'mfp-fade'
 				});
+
+                createNavMenu(foldingContent);
 			});
 		} else {
 			/* close the folding panel */
