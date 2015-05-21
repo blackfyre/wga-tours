@@ -15062,19 +15062,25 @@ jQuery(document).ready(function($){
             }).appendTo(select);
         });
 
-        select.appendTo(conatiner);
-        conatiner.prependTo(findIn);
+        if (select.children().length > 0) {
+            select.appendTo(conatiner);
+            conatiner.prependTo(findIn);
 
-        Select.init();
+            Select.init();
 
-        select.on('change', function() {
+            select.on('change', function() {
 
-            var e = $(this);
+                var e = $(this);
 
-            findIn.scrollTo($('#' + e.val()),{
-                duration: 300
+                findIn.scrollTo($('#' + e.val()),{
+                    duration: 300
+                });
             });
-        });
+        } else {
+            conatiner.prependTo(findIn);
+        }
+
+
     }
 
 	function toggleContent(url, bool) {
